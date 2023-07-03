@@ -168,7 +168,7 @@ async def ping_main(interaction: discord.Interaction):
     await interaction.response.send_message("Pong!", ephemeral=True)
 
 
-# TODO: Add /export_logs (with a parameter 'date', uploading all logs on that date to a google sheet)
+# TODO: Add /export_logs (with a date parameter, uploading all logs on that date to a google sheet)
 @tree.command(
     description="Show most recent logs (up to 2000 characters)",
     guild=discord.Object(id=GUILD_ID),
