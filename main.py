@@ -43,7 +43,7 @@ async def on_ready():
             round(time.time(), 2),
             time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
             "Main",
-            f"Connected as, {bot.user.name} [{bot.user.id}] in servers: {', '.join(guilds)}",
+            f"Connected as {bot.user.name} [{bot.user.id}] in servers: {', '.join(guilds)}",
         ]
     )
 
