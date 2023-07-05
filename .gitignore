@@ -2,3 +2,4 @@ config.py
 old_queue.py
 __pycache__/
 logs/
+.vscode/
