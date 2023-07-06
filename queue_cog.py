@@ -188,7 +188,7 @@ class queue_handler(commands.Cog):
 
     async def add_to_queue(self, interaction, user, tier, queue_channel_id, added):
         queue_channel = self.bot.get_channel(queue_channel_id)
-        queue[tier][user.id] = round(time.time(), 2)
+        queue[tier][user.id] = round(time.time())
 
         if added:
             log_event(
@@ -250,6 +250,146 @@ class queue_handler(commands.Cog):
             embed.color = 0xFF8B00
             embed.description = f"{user.mention} has joined the queue."
             await interaction.response.send_message(embed=embed)
+
+    # Leave command
+    @app_commands.command(description="Leave the queue.")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def l(self, interaction: discord.Interaction):
+        if interaction.channel_id == ELITE:
+            await self.remove_from_queue(
+                interaction,
+                interaction.user,
+                "elite",
+                ELITE,
+                False,
+            )
+        elif interaction.channel_id == PREMIER:
+            await self.remove_from_queue(
+                interaction,
+                interaction.user,
+                "premier",
+                PREMIER,
+                False,
+            )
+        elif interaction.channel_id == CHAMPIONSHIP:
+            await self.remove_from_queue(
+                interaction,
+                interaction.user,
+                "championship",
+                CHAMPIONSHIP,
+                False,
+            )
+        elif interaction.channel_id == CASUAL:
+            await self.remove_from_queue(
+                interaction,
+                interaction.user,
+                "casual",
+                CASUAL,
+                False,
+            )
+        else:
+            await interaction.response.send_message(
+                "Queuing is not enabled in this channel.", ephemeral=True
+            )
+
+    # Leave command
+    @app_commands.command(description="Remove a user from the queue.")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def remove(self, interaction: discord.Interaction, user: discord.User):
+        if interaction.channel_id == ELITE_LOGS:
+            await self.remove_from_queue(
+                interaction,
+                user,
+                "elite",
+                ELITE,
+                True,
+            )
+        elif interaction.channel_id == PREMIER_LOGS:
+            await self.remove_from_queue(
+                interaction,
+                user,
+                "premier",
+                PREMIER,
+                True,
+            )
+        elif interaction.channel_id == CHAMPIONSHIP_LOGS:
+            await self.remove_from_queue(
+                interaction,
+                user,
+                "championship",
+                CHAMPIONSHIP,
+                True,
+            )
+        elif interaction.channel_id == CASUAL_LOGS:
+            await self.remove_from_queue(
+                interaction,
+                user,
+                "casual",
+                CASUAL,
+                True,
+            )
+        else:
+            await interaction.response.send_message(
+                "Queuing is not enabled in this channel.", ephemeral=True
+            )
+
+    # Queue removal function
+    async def remove_from_queue(
+        self, interaction, user, tier, queue_channel_id, removed
+    ):
+        queue_channel = self.bot.get_channel(queue_channel_id)
+        try:
+            del queue[tier][user.id]
+            if removed:
+                embed = discord.Embed(
+                    title="Player Removed",
+                    description=f"{user.mention} has been removed from the <#{queue_channel_id}> queue",
+                    color=0xFF0000,
+                )
+                await interaction.response.send_message(embed=embed)
+
+                if len(queue[tier]) == 1:
+                    embed = discord.Embed(title="1 player is in the queue!")
+                    embed.set_footer(
+                        text="5 more needed!",
+                        icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                    )
+                else:
+                    embed = discord.Embed(
+                        title=f"{len(queue[tier])} players are in the queue!"
+                    )
+                    embed.set_footer(
+                        text=f"{str(6-len(queue[tier]))} more needed!",
+                        icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                    )
+                embed.color = 0xFFFFFF
+                embed.description = f"{user.mention} has left the queue."
+                await queue_channel.send(embed=embed)
+            else:
+                if len(queue) == 1:
+                    embed = discord.Embed(title="1 player is in the queue!")
+                    embed.set_footer(
+                        text="5 more needed!",
+                        icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                    )
+                else:
+                    embed = discord.Embed(
+                        title=f"{len(queue[tier])} players are in the queue!"
+                    )
+                    embed.set_footer(
+                        text=f"{str(6-len(queue[tier]))} more needed!",
+                        icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                    )
+                embed.color = 0xFFFFFF
+                embed.description = f"{user.mention} has left the queue."
+                await interaction.response.send_message(embed=embed)
+        except KeyError:
+            if removed:
+                await interaction.response.send_message("User is not in the queue.")
+            else:
+                await interaction.response.send_message(
+                    "You are not in the queue.", ephemeral=True
+                )
 
 
 async def setup(bot):
