@@ -190,17 +190,11 @@ class queue_handler(commands.Cog):
 
     async def add_to_queue(self, interaction, user, tier, queue_channel_id, added):
         queue_channel = self.bot.get_channel(queue_channel_id)
-        queue[tier][user.id] = round(time.time())
 
+        # REF: 'len(queue[tier])+1' -> '+1' is needed to simulate the user being added to the queue without appending to the queue
+        # The user is now appended to the queue AFTER the embed is sent
+        # This prevents a second user queueing before the embed is sent, resulting in the '7 players in the queue' issue
         if added:
-            log_event(
-                [
-                    round(time.time(), 2),
-                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
-                    "Queue",
-                    f"{user.name} [{user.id}] has been added to the {queue_channel.name[:-6]} queue ({len(queue[tier])} in queue)",
-                ]
-            )
             embed = discord.Embed(
                 title="Player Added",
                 description=f"{user.mention} has been added to the <#{queue_channel_id}> queue",
@@ -208,7 +202,7 @@ class queue_handler(commands.Cog):
             )
             await interaction.response.send_message(embed=embed)
 
-            if len(queue[tier]) == 1:
+            if len(queue[tier]) + 1 == 1:
                 embed = discord.Embed(title="1 player is in the queue!")
                 embed.set_footer(
                     text="5 more needed!",
@@ -216,26 +210,17 @@ class queue_handler(commands.Cog):
                 )
             else:
                 embed = discord.Embed(
-                    title=f"{len(queue[tier])} players are in the queue!"
+                    title=f"{len(queue[tier])+1} players are in the queue!"
                 )
                 embed.set_footer(
-                    text=f"{str(6-len(queue[tier]))} more needed!",
+                    text=f"{6-len(queue[tier])+1} more needed!",
                     icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
                 )
             embed.color = 0xFF8B00
             embed.description = f"{user.mention} has been added to the queue."
             await queue_channel.send(embed=embed)
         else:
-            log_event(
-                [
-                    round(time.time(), 2),
-                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
-                    "Queue",
-                    f"{user.name} [{user.id}] has joined the {queue_channel.name[:-6]} queue ({len(queue[tier])} in queue)",
-                ]
-            )
-
-            if len(queue[tier]) == 1:
+            if len(queue[tier]) + 1 == 1:
                 embed = discord.Embed(title="1 player is in the queue!")
                 embed.set_footer(
                     text="5 more needed!",
@@ -243,15 +228,28 @@ class queue_handler(commands.Cog):
                 )
             else:
                 embed = discord.Embed(
-                    title=f"{len(queue[tier])} players are in the queue!"
+                    title=f"{len(queue[tier])+1} players are in the queue!"
                 )
                 embed.set_footer(
-                    text=f"{str(6-len(queue[tier]))} more needed!",
+                    text=f"{6-len(queue[tier])+1} more needed!",
                     icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
                 )
             embed.color = 0xFF8B00
             embed.description = f"{user.mention} has joined the queue."
             await interaction.response.send_message(embed=embed)
+        queue[tier][user.id] = round(time.time())
+
+        log_event(
+            [
+                round(time.time(), 2),
+                time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                "Queue",
+                f"{user.name} [{user.id}] has been added to the {queue_channel.name[:-6]} queue ({len(queue[tier])} in queue)",
+            ]
+        )
+
+        if len(queue[tier]) == 6:
+            print("Full")
 
     # Leave command
     @app_commands.command(description="Leave the queue.")
@@ -360,15 +358,15 @@ class queue_handler(commands.Cog):
         queue_channel = self.bot.get_channel(queue_channel_id)
         try:
             del queue[tier][user.id]
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Queue",
+                    f"{user.name} [{user.id}] has been removed from the {queue_channel.name[:-6]} queue ({len(queue[tier])} in queue)",
+                ]
+            )
             if removed:
-                log_event(
-                    [
-                        round(time.time(), 2),
-                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
-                        "Queue",
-                        f"{user.name} [{user.id}] has been removed from the {queue_channel.name[:-6]} queue ({len(queue[tier])} in queue)",
-                    ]
-                )
                 embed = discord.Embed(
                     title="Player Removed",
                     description=f"{user.mention} has been removed from the <#{queue_channel_id}> queue",
@@ -394,14 +392,6 @@ class queue_handler(commands.Cog):
                 embed.description = f"{user.mention} has left the queue."
                 await queue_channel.send(embed=embed)
             else:
-                log_event(
-                    [
-                        round(time.time(), 2),
-                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
-                        "Queue",
-                        f"{user.name} [{user.id}] has left the {queue_channel.name[:-6]} queue ({len(queue[tier])} in queue)",
-                    ]
-                )
                 if len(queue) == 1:
                     embed = discord.Embed(title="1 player is in the queue!")
                     embed.set_footer(
