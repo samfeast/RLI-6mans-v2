@@ -60,6 +60,7 @@ class queue_handler(commands.Cog):
                 f"'q' used by {interaction.user.name} [{interaction.user.id}] in {interaction.channel.name} [{interaction.channel.id}]",
             ]
         )
+
         if interaction.channel.id == ELITE:
             if interaction.user.id in queue["elite"]:
                 await interaction.response.send_message(
@@ -128,6 +129,7 @@ class queue_handler(commands.Cog):
                 f"'add' used by {interaction.user.name} [{interaction.user.id}] in {interaction.channel.name} [{interaction.channel.id}] on {user.name} [{user.id}]",
             ]
         )
+
         if interaction.channel.id == ELITE_LOGS:
             if user.id in queue["elite"]:
                 await interaction.response.send_message(
@@ -255,6 +257,15 @@ class queue_handler(commands.Cog):
     @app_commands.command(description="Leave the queue.")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def l(self, interaction: discord.Interaction):
+        log_event(
+            [
+                round(time.time(), 2),
+                time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                "Queue",
+                f"'l' used by {interaction.user.name} [{interaction.user.id}] in {interaction.channel.name} [{interaction.channel.id}]",
+            ]
+        )
+
         if interaction.channel_id == ELITE:
             await self.remove_from_queue(
                 interaction,
@@ -296,6 +307,15 @@ class queue_handler(commands.Cog):
     @app_commands.command(description="Remove a user from the queue.")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def remove(self, interaction: discord.Interaction, user: discord.User):
+        log_event(
+            [
+                round(time.time(), 2),
+                time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                "Queue",
+                f"'remove' used by {interaction.user.name} [{interaction.user.id}] in {interaction.channel.name} [{interaction.channel.id}] on {user.name} [{user.id}]",
+            ]
+        )
+
         if interaction.channel_id == ELITE_LOGS:
             await self.remove_from_queue(
                 interaction,
@@ -341,6 +361,14 @@ class queue_handler(commands.Cog):
         try:
             del queue[tier][user.id]
             if removed:
+                log_event(
+                    [
+                        round(time.time(), 2),
+                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                        "Queue",
+                        f"{user.name} [{user.id}] has been removed from the {queue_channel.name[:-6]} queue ({len(queue[tier])} in queue)",
+                    ]
+                )
                 embed = discord.Embed(
                     title="Player Removed",
                     description=f"{user.mention} has been removed from the <#{queue_channel_id}> queue",
@@ -366,6 +394,14 @@ class queue_handler(commands.Cog):
                 embed.description = f"{user.mention} has left the queue."
                 await queue_channel.send(embed=embed)
             else:
+                log_event(
+                    [
+                        round(time.time(), 2),
+                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                        "Queue",
+                        f"{user.name} [{user.id}] has left the {queue_channel.name[:-6]} queue ({len(queue[tier])} in queue)",
+                    ]
+                )
                 if len(queue) == 1:
                     embed = discord.Embed(title="1 player is in the queue!")
                     embed.set_footer(
@@ -384,6 +420,14 @@ class queue_handler(commands.Cog):
                 embed.description = f"{user.mention} has left the queue."
                 await interaction.response.send_message(embed=embed)
         except KeyError:
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Queue",
+                    f"Unable to remove {user.name} [{user.id}] from the {queue_channel.name[:-6]} queue",
+                ]
+            )
             if removed:
                 await interaction.response.send_message("User is not in the queue.")
             else:
