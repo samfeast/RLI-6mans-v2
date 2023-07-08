@@ -108,4 +108,4 @@ async def a(ctx: commands.Context):
     await ctx.send(queue)
 
 
-bot.run("OTk0MTY0MjQyNzEyMzcxMzUw.Gd5np-.sLJFixnXhSipJw4Yte9S6lSa39-kbtm-E2GxWk")
+bot.run("THIS TOKEN IS NOT HERE")
