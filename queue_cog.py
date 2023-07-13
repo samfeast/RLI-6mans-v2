@@ -29,6 +29,7 @@ race_condition_queue_lock = {
     "championship": False,
     "casual": False,
 }
+view_messages = []
 
 def log_event(event):
     with open("logs/live_logs.csv", "a", newline="") as write_file:
@@ -317,6 +318,9 @@ class queue_handler(commands.Cog):
                 )
                 await queue_channel.send(embed=embed)
 
+                message = await queue_channel.send(view=Team_Picker(game_id))
+                view_messages.append(message)
+
     # Leave command
     @app_commands.command(description="Leave the queue.")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
@@ -490,6 +494,77 @@ class queue_handler(commands.Cog):
                 await interaction.response.send_message(
                     "You are not in the queue.", ephemeral=True
                 )
+
+class Team_Picker(discord.ui.View):
+    def __init__(self, game_id: str):
+        super().__init__(timeout=4)
+
+        self.game_id = game_id
+
+    async def on_timeout(self):
+        await view_messages[0].edit(
+            content=f"View Expired", embed=None, view=None
+        )
+        view_messages.pop(0)
+
+    @discord.ui.button(label="Random (0)", style=discord.ButtonStyle.red)
+    async def random_teams(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        await interaction.response.defer()
+        original_response = await interaction.original_response()
+        view_messages.remove(original_response)
+        view_messages.append(original_response)
+        if interaction.user.id in active_queues[self.game_id]["players"]:
+            if interaction.user.id not in active_queues[self.game_id]["voted"]:
+                active_queues[self.game_id]["voted"].append(interaction.user.id)
+                active_queues[self.game_id]["random"] += 1
+                button.label = f"Random ({active_queues[self.game_id]['random']})"
+
+                await interaction.followup.send("You have voted for random teams.", ephemeral=True)
+                await interaction.followup.edit_message(message_id=original_response.id,view=self)
+            else:
+                await interaction.followup.send("You have already voted.", ephemeral=True)
+        else:
+            await interaction.followup.send("You do not have permission to vote on this queue.", ephemeral=True)
+
+    @discord.ui.button(label="Captains (0)", style=discord.ButtonStyle.blurple)
+    async def captains_teams(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        await interaction.response.defer()
+        original_response = await interaction.original_response()
+        if interaction.user.id in active_queues[self.game_id]["players"]:
+            if interaction.user.id not in active_queues[self.game_id]["voted"]:
+                active_queues[self.game_id]["voted"].append(interaction.user.id)
+                active_queues[self.game_id]["captains"] += 1
+                button.label = f"Captains ({active_queues[self.game_id]['captains']})"
+
+                await interaction.followup.send("You have voted for captains teams.", ephemeral=True)
+                await interaction.followup.edit_message(message_id=original_response.id,view=self)
+            else:
+                await interaction.followup.send("You have already voted.", ephemeral=True)
+        else:
+            await interaction.followup.send("You do not have permission to vote on this queue.", ephemeral=True)
+
+    @discord.ui.button(label="Balanced (0)", style=discord.ButtonStyle.green)
+    async def balanced_teams(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        await interaction.response.defer()
+        original_response = await interaction.original_response()
+        if interaction.user.id in active_queues[self.game_id]["players"]:
+            if interaction.user.id not in active_queues[self.game_id]["voted"]:
+                active_queues[self.game_id]["voted"].append(interaction.user.id)
+                active_queues[self.game_id]["balanced"] += 1
+                button.label = f"Balanced ({active_queues[self.game_id]['balanced']})"
+
+                await interaction.followup.send("You have voted for balanced teams.", ephemeral=True)
+                await interaction.followup.edit_message(message_id=original_response.id,view=self)
+            else:
+                await interaction.followup.send("You have already voted.", ephemeral=True)
+        else:
+            await interaction.followup.send("You do not have permission to vote on this queue.", ephemeral=True)
 
 
 async def setup(bot):
