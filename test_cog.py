@@ -13,6 +13,8 @@ GUILD_ID = config.GUILD_ID
 
 queue = ["Tomster", "Shallow", "Llama", "DLynch"]
 
+global messages
+messages = []
 
 class Test_Commands(commands.Cog):
     def __init__(self, bot):
@@ -23,6 +25,15 @@ class Test_Commands(commands.Cog):
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def ping_test(self, interaction: discord.Interaction):
         await interaction.response.send_message("Pong!", ephemeral=True)
+
+    @app_commands.command(description="alpha")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def alpha(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        await interaction.followup.send("1")
+        await interaction.followup.send("2")
+        await interaction.response.send_message("Pong!", ephemeral=True)
+
 
     @app_commands.command(description="test view")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
@@ -37,31 +48,38 @@ class Test_Commands(commands.Cog):
             f"View Created: {datetime.utcnow().strftime('%H:%M:%S')}",
             view=Test_View(),
         )
-        Test_View.message = await interaction.original_response()
+        message = await interaction.original_response()
+        messages.append(message)
 
 
-# PROBLEM: 'message' is defined whenever the view is made. If two views are made, with the second one being made before the first one times out, while both will call on_timeout, 'message' will be the second message (aquired by line 40) both times
-# POTENTIAL SOLUTION: Make a list containing all the messages, then when on_timeout is called, the first message in the list is deleted
-# FIRST TEST: Try a global list to pass the list of messages into 'Counter' - undesirable long term solution
+# This is a functional, but UNDESIRABLE solution. It uses a global variable ('messages') which is bad practice
 class Test_View(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=10)
+        super().__init__(timeout=45)
 
     async def on_timeout(self):
-        self.messages.append(self.message)
-        print(self.messages)
-        await self.messages[0].edit(
+        await messages[0].edit(
             content=f"View Expired: {datetime.utcnow().strftime('%H:%M:%S')}", view=None
         )
+        messages.pop(0)
 
-    @discord.ui.button(label="button", style=discord.ButtonStyle.gray)
+    @discord.ui.button(label="off", style=discord.ButtonStyle.red)
     async def test_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
-        button.disabled = True
+        #button.disabled = True
         print(f"Pressed at {datetime.utcnow().strftime('%H:%M:%S')}")
-
+        if button.label == "off":
+            button.label = "on"
+            button.style = discord.ButtonStyle.green
+        else:
+            button.label = "off"
+            button.style = discord.ButtonStyle.red
         await interaction.response.edit_message(view=self)
+        message = await interaction.original_response()
+        messages.remove(message)
+        messages.append(message)
+        
 
 
 # Define a simple View that gives us a counter button
