@@ -3,3 +3,5 @@ old_queue.py
 __pycache__/
 logs/
 .vscode/
+test_cog.py
+test.py
