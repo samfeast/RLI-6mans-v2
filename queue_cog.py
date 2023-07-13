@@ -36,6 +36,31 @@ def log_event(event):
         writer = csv.writer(write_file)
         writer.writerow(event)
 
+def resolve_voting(game_id):
+    random_votes = active_queues[game_id]["random"]
+    captains_votes = active_queues[game_id]["captains"]
+    balanced_votes = active_queues[game_id]["balanced"]
+
+    if random_votes >= 4:
+        return "random"
+    elif captains_votes >= 3:
+        return "captains"
+    elif balanced_votes >= 4:
+        return "balanced"
+    elif random_votes + captains_votes + balanced_votes == 6:
+        if random_votes > captains_votes and random_votes > balanced_votes:
+            return "random"
+        elif captains_votes > random_votes and captains_votes > balanced_votes:
+            return "captains"
+        elif balanced_votes > random_votes and balanced_votes > captains_votes:
+            return "balanced"
+        elif random_votes == 3 and balanced_votes == 3:
+            return "balanced"
+        else:
+            return "captains" 
+    else:
+        return "unresolved"
+
 class queue_handler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -540,6 +565,9 @@ class Team_Picker(discord.ui.View):
 
                 await interaction.followup.send("You have voted for random teams.", ephemeral=True)
                 await interaction.followup.edit_message(message_id=message.id,view=self)
+
+                team_type = resolve_voting(self.game_id)
+                print(team_type)
             else:
                 await interaction.followup.send("You have already voted.", ephemeral=True)
         else:
@@ -567,6 +595,9 @@ class Team_Picker(discord.ui.View):
 
                 await interaction.followup.send("You have voted for captains teams.", ephemeral=True)
                 await interaction.followup.edit_message(message_id=message.id,view=self)
+
+                team_type = resolve_voting(self.game_id)
+                print(team_type)
             else:
                 await interaction.followup.send("You have already voted.", ephemeral=True)
         else:
@@ -603,6 +634,9 @@ class Team_Picker(discord.ui.View):
 
                 await interaction.followup.send("You have voted for balanced teams.", ephemeral=True)
                 await interaction.followup.edit_message(message_id=message.id,view=self)
+
+                team_type = resolve_voting(self.game_id)
+                print(team_type)
             else:
                 await interaction.followup.send("You have already voted.", ephemeral=True)
         else:
