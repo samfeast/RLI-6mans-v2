@@ -22,6 +22,7 @@ CASUAL_LOGS = config.CASUAL_LOGS
 
 #5/6 players queued for ease of testing
 queue = {"elite": {935182920019234887: 1, 1104162909120110603: 2, 865798504714338324: 3, 988906946725822484: 4, 963466636059365476: 5}, "premier": {}, "championship": {}, "casual": {}}
+active_queues = {}
 race_condition_queue_lock = {
     "elite": False,
     "premier": False,
@@ -289,7 +290,32 @@ class queue_handler(commands.Cog):
             )
 
             if len(queue[tier]) == 6:
-                print("Full")
+                # Crude method of picking a game id which isn't already the id of another active queue
+                game_id = "RLI" + str(random.randint(1,10))
+
+                while game_id in active_queues:
+                    game_id = "RLI" + str(random.randint(1,10))
+
+                log_event(
+                    [
+                        round(time.time(), 2),
+                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                        "Queue",
+                        # This syntax is horrible, find a better way?                      (HERE)
+                        f"Queue filled in {queue_channel.name[:-6]} containing {', '.join(map(str, list(queue[tier].keys())))} ({game_id})",
+                    ]
+                )
+
+                active_queues[game_id] = {"players": list(queue[tier].keys()), "voted": [], "random": 0, "captains": 0, "balanced": 0}
+
+                queue[tier] = {}
+
+                embed = discord.Embed(title=f"Queue has been reset.", color=0xFF8B00)
+                embed.set_footer(
+                    text=f"When's the next one...?",
+                    icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                )
+                await queue_channel.send(embed=embed)
 
     # Leave command
     @app_commands.command(description="Leave the queue.")
