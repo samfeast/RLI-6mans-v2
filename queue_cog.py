@@ -20,8 +20,19 @@ PREMIER_LOGS = config.PREMIER_LOGS
 CHAMPIONSHIP_LOGS = config.CHAMPIONSHIP_LOGS
 CASUAL_LOGS = config.CASUAL_LOGS
 
-#5/6 players queued for ease of testing
-queue = {"elite": {935182920019234887: 1, 1104162909120110603: 2, 865798504714338324: 3, 988906946725822484: 4, 963466636059365476: 5}, "premier": {}, "championship": {}, "casual": {}}
+# 5/6 players queued for ease of testing
+queue = {
+    "elite": {
+        935182920019234887: 1,
+        1104162909120110603: 2,
+        865798504714338324: 3,
+        988906946725822484: 4,
+        963466636059365476: 5,
+    },
+    "premier": {},
+    "championship": {},
+    "casual": {},
+}
 active_queues = {}
 race_condition_queue_lock = {
     "elite": False,
@@ -31,49 +42,11 @@ race_condition_queue_lock = {
 }
 view_messages = []
 
+
 def log_event(event):
     with open("logs/live_logs.csv", "a", newline="") as write_file:
         writer = csv.writer(write_file)
         writer.writerow(event)
-
-def resolve_voting(game_id):
-    random_votes = active_queues[game_id]["random"]
-    captains_votes = active_queues[game_id]["captains"]
-    balanced_votes = active_queues[game_id]["balanced"]
-
-    if random_votes >= 4:
-        return "random"
-    elif captains_votes >= 3:
-        return "captains"
-    elif balanced_votes >= 4:
-        return "balanced"
-    elif random_votes + captains_votes + balanced_votes == 6:
-        if random_votes > captains_votes and random_votes > balanced_votes:
-            return "random"
-        elif captains_votes > random_votes and captains_votes > balanced_votes:
-            return "captains"
-        elif balanced_votes > random_votes and balanced_votes > captains_votes:
-            return "balanced"
-        elif random_votes == 3 and balanced_votes == 3:
-            return "balanced"
-        else:
-            return "captains" 
-    else:
-        return "unresolved"
-    
-def make_random_teams(game_id):
-    queue = active_queues[game_id]["players"]
-    random.shuffle(queue)
-    team1 = [queue[0], queue[1], queue[2]]
-    team2 = [queue[3], queue[4], queue[5]]
-
-    return team1, team2
-
-def make_captains_teams(game_id):
-    return "Teams"
-
-def make_balanced_teams(game_id):
-    return "Teams"
 
 class queue_handler(commands.Cog):
     def __init__(self, bot):
@@ -331,12 +304,18 @@ class queue_handler(commands.Cog):
 
             if len(queue[tier]) == 6:
                 # Crude method of picking a game id which isn't already the id of another active queue
-                game_id = "RLI" + str(random.randint(1,10))
+                game_id = "RLI" + str(random.randint(1, 10))
 
                 while game_id in active_queues:
-                    game_id = "RLI" + str(random.randint(1,10))
+                    game_id = "RLI" + str(random.randint(1, 10))
 
-                active_queues[game_id] = {"players": list(queue[tier].keys()), "voted": [], "random": 0, "captains": 0, "balanced": 0}
+                active_queues[game_id] = {
+                    "players": list(queue[tier].keys()),
+                    "voted": [],
+                    "random": 0,
+                    "captains": 0,
+                    "balanced": 0,
+                }
 
                 log_event(
                     [
@@ -375,7 +354,9 @@ class queue_handler(commands.Cog):
                     icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
                 )
 
-                message = await queue_channel.send(" ".join(mention_players), embed=embed, view=Team_Picker(game_id))
+                message = await queue_channel.send(
+                    " ".join(mention_players), embed=embed, view=Team_Picker(game_id)
+                )
                 view_messages.append(message)
 
     # Leave command
@@ -552,11 +533,53 @@ class queue_handler(commands.Cog):
                     "You are not in the queue.", ephemeral=True
                 )
 
+
 class Team_Picker(discord.ui.View):
     def __init__(self, game_id: str):
         super().__init__(timeout=10)
-
         self.game_id = game_id
+
+    # Check if any of the criteria needed for voting to be resolved have been met, if so return winning team type, else return unresovled
+    def resolve_voting(self, game_id):
+        random_votes = active_queues[game_id]["random"]
+        captains_votes = active_queues[game_id]["captains"]
+        balanced_votes = active_queues[game_id]["balanced"]
+
+        if random_votes >= 4:
+            return "random"
+        elif captains_votes >= 3:
+            return "captains"
+        elif balanced_votes >= 4:
+            return "balanced"
+        elif random_votes + captains_votes + balanced_votes == 6:
+            if random_votes > captains_votes and random_votes > balanced_votes:
+                return "random"
+            elif captains_votes > random_votes and captains_votes > balanced_votes:
+                return "captains"
+            elif balanced_votes > random_votes and balanced_votes > captains_votes:
+                return "balanced"
+            elif random_votes == 3 and balanced_votes == 3:
+                return "balanced"
+            else:
+                return "captains"
+        else:
+            return "unresolved"
+    
+    # Generate two teams from a given queue and team type
+    async def make_teams(self, game_id, team_type):
+        queue = active_queues[game_id]["players"]
+        if team_type == "random":
+            random.shuffle(queue)
+            team1 = [queue[0], queue[1], queue[2]]
+            team2 = [queue[3], queue[4], queue[5]]
+        elif team_type == "captains":
+            team1 = []
+            team2 = []
+        elif team_type == "balanced":
+            team1 = []
+            team2 = []
+
+        return team1, team2
 
     async def on_timeout(self):
         embed = discord.Embed(
@@ -593,10 +616,14 @@ class Team_Picker(discord.ui.View):
                 )
                 button.label = f"Random ({active_queues[self.game_id]['random']})"
 
-                await interaction.followup.send("You have voted for random teams.", ephemeral=True)
-                await interaction.followup.edit_message(message_id=message.id,view=self)
+                await interaction.followup.send(
+                    "You have voted for random teams.", ephemeral=True
+                )
+                await interaction.followup.edit_message(
+                    message_id=message.id, view=self
+                )
 
-                team_type = resolve_voting(self.game_id)
+                team_type = self.resolve_voting(self.game_id)
 
                 # Override for testing
                 if interaction.user.name == "res43":
@@ -605,18 +632,18 @@ class Team_Picker(discord.ui.View):
 
                 if team_type == "unresolved":
                     pass
-                elif team_type == "random":
-                    team1, team2 = make_random_teams(self.game_id)
+                else:
+                    team1, team2 = await self.make_teams(self.game_id, team_type)
                     print(team1)
                     print(team2)
-                elif team_type == "captains":
-                    make_captains_teams(self.game_id)
-                elif team_type == "balanced":
-                    make_balanced_teams(self.game_id)
             else:
-                await interaction.followup.send("You have already voted.", ephemeral=True)
+                await interaction.followup.send(
+                    "You have already voted.", ephemeral=True
+                )
         else:
-            await interaction.followup.send("You do not have permission to vote on this queue.", ephemeral=True)
+            await interaction.followup.send(
+                "You do not have permission to vote on this queue.", ephemeral=True
+            )
 
     @discord.ui.button(label="Captains (0)", style=discord.ButtonStyle.blurple)
     async def captains_teams_vote(
@@ -638,11 +665,15 @@ class Team_Picker(discord.ui.View):
                 )
                 button.label = f"Captains ({active_queues[self.game_id]['captains']})"
 
-                await interaction.followup.send("You have voted for captains teams.", ephemeral=True)
-                await interaction.followup.edit_message(message_id=message.id,view=self)
+                await interaction.followup.send(
+                    "You have voted for captains teams.", ephemeral=True
+                )
+                await interaction.followup.edit_message(
+                    message_id=message.id, view=self
+                )
 
-                team_type = resolve_voting(self.game_id)
-                
+                team_type = self.resolve_voting(self.game_id)
+
                 # Override for testing
                 if interaction.user.name == "res43":
                     print(f"'resolve_voting' returned {team_type}, but overriding...")
@@ -650,18 +681,18 @@ class Team_Picker(discord.ui.View):
 
                 if team_type == "unresolved":
                     pass
-                elif team_type == "random":
-                    team1, team2 = make_random_teams(self.game_id)
+                else:
+                    team1, team2 = await self.make_teams(self.game_id, team_type)
                     print(team1)
                     print(team2)
-                elif team_type == "captains":
-                    make_captains_teams(self.game_id)
-                elif team_type == "balanced":
-                    make_balanced_teams(self.game_id)
             else:
-                await interaction.followup.send("You have already voted.", ephemeral=True)
+                await interaction.followup.send(
+                    "You have already voted.", ephemeral=True
+                )
         else:
-            await interaction.followup.send("You do not have permission to vote on this queue.", ephemeral=True)
+            await interaction.followup.send(
+                "You do not have permission to vote on this queue.", ephemeral=True
+            )
 
     @discord.ui.button(label="Balanced (0)", style=discord.ButtonStyle.green)
     async def balanced_teams_vote(
@@ -675,7 +706,7 @@ class Team_Picker(discord.ui.View):
                 f"{interaction.user.name} [{interaction.user.id}] voted for balanced teams for {self.game_id}",
             ]
         )
-    
+
         await interaction.response.defer()
         message = await interaction.original_response()
         if interaction.user.id in active_queues[self.game_id]["players"]:
@@ -692,11 +723,15 @@ class Team_Picker(discord.ui.View):
                 )
                 button.label = f"Balanced ({active_queues[self.game_id]['balanced']})"
 
-                await interaction.followup.send("You have voted for balanced teams.", ephemeral=True)
-                await interaction.followup.edit_message(message_id=message.id,view=self)
+                await interaction.followup.send(
+                    "You have voted for balanced teams.", ephemeral=True
+                )
+                await interaction.followup.edit_message(
+                    message_id=message.id, view=self
+                )
 
-                team_type = resolve_voting(self.game_id)
-                
+                team_type = self.resolve_voting(self.game_id)
+
                 # Override for testing
                 if interaction.user.name == "res43":
                     print(f"'resolve_voting' returned {team_type}, but overriding...")
@@ -704,18 +739,18 @@ class Team_Picker(discord.ui.View):
 
                 if team_type == "unresolved":
                     pass
-                elif team_type == "random":
-                    team1, team2 = make_random_teams(self.game_id)
+                else:
+                    team1, team2 = await self.make_teams(self.game_id, team_type)
                     print(team1)
                     print(team2)
-                elif team_type == "captains":
-                    make_captains_teams(self.game_id)
-                elif team_type == "balanced":
-                    make_balanced_teams(self.game_id)
             else:
-                await interaction.followup.send("You have already voted.", ephemeral=True)
+                await interaction.followup.send(
+                    "You have already voted.", ephemeral=True
+                )
         else:
-            await interaction.followup.send("You do not have permission to vote on this queue.", ephemeral=True)
+            await interaction.followup.send(
+                "You do not have permission to vote on this queue.", ephemeral=True
+            )
 
 
 async def setup(bot):
