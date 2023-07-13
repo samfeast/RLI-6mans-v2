@@ -318,6 +318,15 @@ class queue_handler(commands.Cog):
                 )
                 await queue_channel.send(embed=embed)
 
+                log_event(
+                    [
+                        round(time.time(), 2),
+                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                        "Queue",
+                        f"Team Picker view launched for {game_id}",
+                    ]
+                )
+
                 message = await queue_channel.send(view=Team_Picker(game_id))
                 view_messages.append(message)
 
@@ -508,59 +517,92 @@ class Team_Picker(discord.ui.View):
         view_messages.pop(0)
 
     @discord.ui.button(label="Random (0)", style=discord.ButtonStyle.red)
-    async def random_teams(
+    async def random_teams_vote(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
         await interaction.response.defer()
-        original_response = await interaction.original_response()
-        view_messages.remove(original_response)
-        view_messages.append(original_response)
+        message = await interaction.original_response()
+        view_messages.remove(message)
+        view_messages.append(message)
         if interaction.user.id in active_queues[self.game_id]["players"]:
             if interaction.user.id not in active_queues[self.game_id]["voted"]:
                 active_queues[self.game_id]["voted"].append(interaction.user.id)
                 active_queues[self.game_id]["random"] += 1
+                log_event(
+                    [
+                        round(time.time(), 2),
+                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                        "Queue",
+                        f"{interaction.user.name} [{interaction.user.id}] voted for random teams for {self.game_id} (R: {active_queues[self.game_id]['random']}, C: {active_queues[self.game_id]['captains']}, B: {active_queues[self.game_id]['balanced']})",
+                    ]
+                )
                 button.label = f"Random ({active_queues[self.game_id]['random']})"
 
                 await interaction.followup.send("You have voted for random teams.", ephemeral=True)
-                await interaction.followup.edit_message(message_id=original_response.id,view=self)
+                await interaction.followup.edit_message(message_id=message.id,view=self)
             else:
                 await interaction.followup.send("You have already voted.", ephemeral=True)
         else:
             await interaction.followup.send("You do not have permission to vote on this queue.", ephemeral=True)
 
     @discord.ui.button(label="Captains (0)", style=discord.ButtonStyle.blurple)
-    async def captains_teams(
+    async def captains_teams_vote(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
         await interaction.response.defer()
-        original_response = await interaction.original_response()
+        message = await interaction.original_response()
         if interaction.user.id in active_queues[self.game_id]["players"]:
             if interaction.user.id not in active_queues[self.game_id]["voted"]:
                 active_queues[self.game_id]["voted"].append(interaction.user.id)
                 active_queues[self.game_id]["captains"] += 1
+                log_event(
+                    [
+                        round(time.time(), 2),
+                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                        "Queue",
+                        f"{interaction.user.name} [{interaction.user.id}] voted for captains teams for {self.game_id} (R: {active_queues[self.game_id]['random']}, C: {active_queues[self.game_id]['captains']}, B: {active_queues[self.game_id]['balanced']})",
+                    ]
+                )
                 button.label = f"Captains ({active_queues[self.game_id]['captains']})"
 
                 await interaction.followup.send("You have voted for captains teams.", ephemeral=True)
-                await interaction.followup.edit_message(message_id=original_response.id,view=self)
+                await interaction.followup.edit_message(message_id=message.id,view=self)
             else:
                 await interaction.followup.send("You have already voted.", ephemeral=True)
         else:
             await interaction.followup.send("You do not have permission to vote on this queue.", ephemeral=True)
 
     @discord.ui.button(label="Balanced (0)", style=discord.ButtonStyle.green)
-    async def balanced_teams(
+    async def balanced_teams_vote(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
+        log_event(
+            [
+                round(time.time(), 2),
+                time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                "Queue",
+                f"{interaction.user.name} [{interaction.user.id}] voted for balanced teams for {self.game_id}",
+            ]
+        )
+    
         await interaction.response.defer()
-        original_response = await interaction.original_response()
+        message = await interaction.original_response()
         if interaction.user.id in active_queues[self.game_id]["players"]:
             if interaction.user.id not in active_queues[self.game_id]["voted"]:
                 active_queues[self.game_id]["voted"].append(interaction.user.id)
                 active_queues[self.game_id]["balanced"] += 1
+                log_event(
+                    [
+                        round(time.time(), 2),
+                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                        "Queue",
+                        f"{interaction.user.name} [{interaction.user.id}] voted for balanced teams for {self.game_id} (R: {active_queues[self.game_id]['random']}, C: {active_queues[self.game_id]['captains']}, B: {active_queues[self.game_id]['balanced']})",
+                    ]
+                )
                 button.label = f"Balanced ({active_queues[self.game_id]['balanced']})"
 
                 await interaction.followup.send("You have voted for balanced teams.", ephemeral=True)
-                await interaction.followup.edit_message(message_id=original_response.id,view=self)
+                await interaction.followup.edit_message(message_id=message.id,view=self)
             else:
                 await interaction.followup.send("You have already voted.", ephemeral=True)
         else:
