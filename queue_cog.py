@@ -20,14 +20,8 @@ PREMIER_LOGS = config.PREMIER_LOGS
 CHAMPIONSHIP_LOGS = config.CHAMPIONSHIP_LOGS
 CASUAL_LOGS = config.CASUAL_LOGS
 
-
-def log_event(event):
-    with open("logs/live_logs.csv", "a", newline="") as write_file:
-        writer = csv.writer(write_file)
-        writer.writerow(event)
-
-
-queue = {"elite": {}, "premier": {}, "championship": {}, "casual": {}}
+#5/6 players queued for ease of testing
+queue = {"elite": {935182920019234887: 1, 1104162909120110603: 2, 865798504714338324: 3, 988906946725822484: 4, 963466636059365476: 5}, "premier": {}, "championship": {}, "casual": {}}
 race_condition_queue_lock = {
     "elite": False,
     "premier": False,
@@ -35,6 +29,10 @@ race_condition_queue_lock = {
     "casual": False,
 }
 
+def log_event(event):
+    with open("logs/live_logs.csv", "a", newline="") as write_file:
+        writer = csv.writer(write_file)
+        writer.writerow(event)
 
 class queue_handler(commands.Cog):
     def __init__(self, bot):
@@ -231,6 +229,14 @@ class queue_handler(commands.Cog):
                         text="5 more needed!",
                         icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
                     )
+                    embed.color = 0xFF8B00
+                elif len(queue[tier]) == 6:
+                    embed = discord.Embed(title="6 players are in the queue!")
+                    embed.set_footer(
+                        text="LETS GOOOO!",
+                        icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                    )
+                    embed.color = 0x83FF00
                 else:
                     embed = discord.Embed(
                         title=f"{len(queue[tier])} players are in the queue!"
@@ -239,7 +245,7 @@ class queue_handler(commands.Cog):
                         text=f"{6-len(queue[tier])} more needed!",
                         icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
                     )
-                embed.color = 0xFF8B00
+                    embed.color = 0xFF8B00
                 embed.description = f"{user.mention} has been added to the queue."
                 await queue_channel.send(embed=embed)
             else:
@@ -249,6 +255,16 @@ class queue_handler(commands.Cog):
                         text="5 more needed!",
                         icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
                     )
+                    embed.color = 0xFF8B00
+
+                elif len(queue[tier]) == 6:
+                    embed = discord.Embed(title="6 players are in the queue!")
+                    embed.set_footer(
+                        text="LETS GOOOO!",
+                        icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                    )
+                    embed.color = 0x83FF00
+
                 else:
                     embed = discord.Embed(
                         title=f"{len(queue[tier])} players are in the queue!"
@@ -257,7 +273,7 @@ class queue_handler(commands.Cog):
                         text=f"{6-len(queue[tier])} more needed!",
                         icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
                     )
-                embed.color = 0xFF8B00
+                    embed.color = 0xFF8B00
                 embed.description = f"{user.mention} has joined the queue."
                 await interaction.response.send_message(embed=embed)
 
