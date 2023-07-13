@@ -497,7 +497,7 @@ class queue_handler(commands.Cog):
                         icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
                     )
                 embed.color = 0xFFFFFF
-                embed.description = f"{user.mention} has left the queue."
+                embed.description = f"{user.mention} has been removed from the queue."
                 await queue_channel.send(embed=embed)
             else:
                 if len(queue) == 1:
@@ -532,11 +532,46 @@ class queue_handler(commands.Cog):
                 await interaction.response.send_message(
                     "You are not in the queue.", ephemeral=True
                 )
+    
+    # Status command
+    @app_commands.command(description="Check how many players are in the queue.")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def status(self, interaction: discord.Interaction):
+        if interaction.channel_id == ELITE:
+            await self.show_status(interaction, queue["elite"])
+        elif interaction.channel_id == PREMIER:
+            await self.show_status(interaction, queue["premier"])
+        elif interaction.channel_id == CHAMPIONSHIP:
+            await self.show_status(interaction, queue["championship"])
+        elif interaction.channel_id == CASUAL:
+            await self.show_status(interaction, queue["casual"])
+        else:
+            await interaction.response.send_message(
+                "There is no queue in this channel.", ephemeral=True
+            )
+
+    async def show_status(self, interaction, queue):
+
+        players = []
+        for player in list(queue.keys()):
+            players.append(self.bot.get_user(player).mention)
+        
+        if len(queue) == 1:
+            embed = discord.Embed(title="1 player is in the queue")
+        else:
+            embed = discord.Embed(title=f"{len(queue)} players are in the queue")
+        embed.description = " ".join(players)
+        embed.color = 0xFF8B00
+        embed.set_footer(
+            text=f"{str(6-len(queue))} more needed!",
+            icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+        )
+        await interaction.response.send_message(embed=embed)
 
 
 class Team_Picker(discord.ui.View):
     def __init__(self, game_id: str):
-        super().__init__(timeout=10)
+        super().__init__(timeout=300)
         self.game_id = game_id
 
     # Check if any of the criteria needed for voting to be resolved have been met, if so return winning team type, else return unresovled
@@ -566,9 +601,10 @@ class Team_Picker(discord.ui.View):
             return "unresolved"
     
     # Generate two teams from a given queue and team type
-    async def make_teams(self, game_id, team_type):
+    async def make_teams(self, interaction, game_id, team_type):
         queue = active_queues[game_id]["players"]
         if team_type == "random":
+            # TODO: Current setup is 'simple random' - eventually this should ensure that the teams aren't identical to the previous match if the same players are in the queue
             random.shuffle(queue)
             team1 = [queue[0], queue[1], queue[2]]
             team2 = [queue[3], queue[4], queue[5]]
@@ -576,6 +612,7 @@ class Team_Picker(discord.ui.View):
             team1 = []
             team2 = []
         elif team_type == "balanced":
+            await interaction.followup.send("Test")
             team1 = []
             team2 = []
 
@@ -633,7 +670,15 @@ class Team_Picker(discord.ui.View):
                 if team_type == "unresolved":
                     pass
                 else:
-                    team1, team2 = await self.make_teams(self.game_id, team_type)
+                    log_event(
+                        [
+                            round(time.time(), 2),
+                            time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                            "Queue",
+                            f"Making {team_type} teams for {self.game_id}",
+                        ]
+                    )
+                    team1, team2 = await self.make_teams(interaction, self.game_id, team_type)
                     print(team1)
                     print(team2)
             else:
@@ -682,7 +727,15 @@ class Team_Picker(discord.ui.View):
                 if team_type == "unresolved":
                     pass
                 else:
-                    team1, team2 = await self.make_teams(self.game_id, team_type)
+                    log_event(
+                        [
+                            round(time.time(), 2),
+                            time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                            "Queue",
+                            f"Making {team_type} teams for {self.game_id}",
+                        ]
+                    )
+                    team1, team2 = await self.make_teams(interaction, self.game_id, team_type)
                     print(team1)
                     print(team2)
             else:
@@ -740,7 +793,15 @@ class Team_Picker(discord.ui.View):
                 if team_type == "unresolved":
                     pass
                 else:
-                    team1, team2 = await self.make_teams(self.game_id, team_type)
+                    log_event(
+                        [
+                            round(time.time(), 2),
+                            time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                            "Queue",
+                            f"Making {team_type} teams for {self.game_id}",
+                        ]
+                    )
+                    team1, team2 = await self.make_teams(interaction, self.game_id, team_type)
                     print(team1)
                     print(team2)
             else:

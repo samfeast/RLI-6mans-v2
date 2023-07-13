@@ -1,7 +1,8 @@
 config.py
 old_queue.py
+test_cog.py
+test.py
 __pycache__/
 logs/
 .vscode/
-test_cog.py
-test.py
+json/
