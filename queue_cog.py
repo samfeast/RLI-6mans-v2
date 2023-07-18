@@ -5,20 +5,22 @@ from discord import app_commands
 import json
 import random
 import time
-import config
 import csv
 
-GUILD_ID = config.GUILD_ID
+with open("json/config.json", "r") as read_file:
+    config = json.load(read_file)
 
-ELITE = config.ELITE
-PREMIER = config.PREMIER
-CHAMPIONSHIP = config.CHAMPIONSHIP
-CASUAL = config.CASUAL
+GUILD_ID = config["GUILD_ID"]
 
-ELITE_LOGS = config.ELITE_LOGS
-PREMIER_LOGS = config.PREMIER_LOGS
-CHAMPIONSHIP_LOGS = config.CHAMPIONSHIP_LOGS
-CASUAL_LOGS = config.CASUAL_LOGS
+ELITE = config["CHANNELS"]["ELITE"]
+PREMIER = config["CHANNELS"]["PREMIER"]
+CHAMPIONSHIP = config["CHANNELS"]["CHAMPIONSHIP"]
+CASUAL = config["CHANNELS"]["CASUAL"]
+
+ELITE_LOGS = config["CHANNELS"]["ELITE_LOGS"]
+PREMIER_LOGS = config["CHANNELS"]["PREMIER_LOGS"]
+CHAMPIONSHIP_LOGS = config["CHANNELS"]["CHAMPIONSHIP_LOGS"]
+CASUAL_LOGS = config["CHANNELS"]["CASUAL_LOGS"]
 
 # 5/6 players queued for ease of testing
 queue = {
@@ -47,6 +49,7 @@ def log_event(event):
     with open("logs/live_logs.csv", "a", newline="") as write_file:
         writer = csv.writer(write_file)
         writer.writerow(event)
+
 
 class queue_handler(commands.Cog):
     def __init__(self, bot):
@@ -532,7 +535,7 @@ class queue_handler(commands.Cog):
                 await interaction.response.send_message(
                     "You are not in the queue.", ephemeral=True
                 )
-    
+
     # Status command
     @app_commands.command(description="Check how many players are in the queue.")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
@@ -551,11 +554,10 @@ class queue_handler(commands.Cog):
             )
 
     async def show_status(self, interaction, queue):
-
         players = []
         for player in list(queue.keys()):
             players.append(self.bot.get_user(player).mention)
-        
+
         if len(queue) == 1:
             embed = discord.Embed(title="1 player is in the queue")
         else:
@@ -599,7 +601,7 @@ class Team_Picker(discord.ui.View):
                 return "captains"
         else:
             return "unresolved"
-    
+
     # Generate two teams from a given queue and team type
     async def make_teams(self, interaction, game_id, team_type):
         queue = active_queues[game_id]["players"]
@@ -678,7 +680,9 @@ class Team_Picker(discord.ui.View):
                             f"Making {team_type} teams for {self.game_id}",
                         ]
                     )
-                    team1, team2 = await self.make_teams(interaction, self.game_id, team_type)
+                    team1, team2 = await self.make_teams(
+                        interaction, self.game_id, team_type
+                    )
                     print(team1)
                     print(team2)
             else:
@@ -735,7 +739,9 @@ class Team_Picker(discord.ui.View):
                             f"Making {team_type} teams for {self.game_id}",
                         ]
                     )
-                    team1, team2 = await self.make_teams(interaction, self.game_id, team_type)
+                    team1, team2 = await self.make_teams(
+                        interaction, self.game_id, team_type
+                    )
                     print(team1)
                     print(team2)
             else:
@@ -801,7 +807,9 @@ class Team_Picker(discord.ui.View):
                             f"Making {team_type} teams for {self.game_id}",
                         ]
                     )
-                    team1, team2 = await self.make_teams(interaction, self.game_id, team_type)
+                    team1, team2 = await self.make_teams(
+                        interaction, self.game_id, team_type
+                    )
                     print(team1)
                     print(team2)
             else:

@@ -2,15 +2,18 @@ import discord
 from discord.ext import commands
 import asyncio
 from os import listdir
-import config
 import time
 import csv
+import json
 
 discord.utils.setup_logging()
 
+with open("json/config.json", "r") as read_file:
+    config = json.load(read_file)
+
 PREFIX = ">"
-TOKEN = config.TOKEN
-GUILD_ID = config.GUILD_ID
+TOKEN = config["TOKEN"]
+GUILD_ID = config["GUILD_ID"]
 
 intents = discord.Intents.default()
 intents.members = True
@@ -29,7 +32,6 @@ def log_event(event):
 
 @bot.event
 async def on_ready():
-
     print(f"Logged in as {bot.user.name} [{bot.user.id}]")
     print("Servers:")
     guilds = []
@@ -174,7 +176,6 @@ async def ping_main(interaction: discord.Interaction):
     guild=discord.Object(id=GUILD_ID),
 )
 async def view_logs(interaction: discord.Interaction):
-
     log_event(
         [
             round(time.time(), 2),
