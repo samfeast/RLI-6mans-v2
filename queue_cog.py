@@ -24,6 +24,8 @@ PREMIER_LOGS = config["CHANNELS"]["PREMIER_LOGS"]
 CHAMPIONSHIP_LOGS = config["CHANNELS"]["CHAMPIONSHIP_LOGS"]
 CASUAL_LOGS = config["CHANNELS"]["CASUAL_LOGS"]
 
+ELO_SENSITIVITY = 200
+
 # 5/6 players queued for ease of testing
 queue = {
     "elite": {
@@ -615,8 +617,12 @@ class Team_Picker(discord.ui.View):
 
     # Generate two teams from a given queue and team type
     async def make_teams(self, interaction, game_id, team_type):
+        tier = active_queues[game_id]["tier"]
+
+        with open("json/player_data.json", "r") as read_file:
+            player_data = json.load(read_file)
+
         queue = active_queues[game_id]["players"]
-        print(active_queues[game_id])
         if team_type == "random":
             # TODO: Current setup is 'simple random' - eventually this should ensure that the teams aren't identical to the previous match if the same players are in the queue
             random.shuffle(queue)
@@ -629,18 +635,34 @@ class Team_Picker(discord.ui.View):
             team1 = []
             team2 = []
 
+        team1_elo = 0
+        team2_elo = 0
+
+        for team1_player, team2_player in zip(team1, team2):
+            if str(team1_player) in player_data[tier]:
+                team1_elo += player_data[tier][str(team1_player)]["elo"]
+            else:
+                team1_elo += 1000
+            if str(team2_player) in player_data[tier]:
+                team2_elo += player_data[tier][str(team1_player)]["elo"]
+            else:
+                team2_elo += 1000
+
+        p1_win = 1 / (1 + 10 ** ((team2_elo - team1_elo) / ELO_SENSITIVITY))
+        p2_win = 1 / (1 + 10 ** ((team1_elo - team2_elo) / ELO_SENSITIVITY))
+
         with open("json/game_log.json", "r") as read_file:
             game_log = json.load(read_file)
 
         game_log["live"][game_id] = {
-            "timestamp": time.time(),
+            "timestamp": round(time.time()),
             "tier": active_queues[game_id]["tier"],
             "team1": team1,
             "team2": team2,
             "winner": None,
             "loser": None,
-            "p1_win": None,
-            "p2_win": None,
+            "p1_win": p1_win,
+            "p2_win": p2_win,
         }
 
         with open("json/game_log.json", "w") as write_file:
