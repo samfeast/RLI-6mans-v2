@@ -6,6 +6,8 @@ import json
 import random
 import time
 import csv
+from datetime import datetime
+import pytz
 
 with open("json/config.json", "r") as read_file:
     config = json.load(read_file)
@@ -36,7 +38,7 @@ queue = {
     "casual": {},
 }
 active_queues = {}
-race_condition_queue_lock = {
+queue_lock = {
     "elite": False,
     "premier": False,
     "championship": False,
@@ -212,7 +214,7 @@ class queue_handler(commands.Cog):
     async def add_to_queue(self, interaction, user, tier, queue_channel_id, added):
         queue_channel = self.bot.get_channel(queue_channel_id)
 
-        if race_condition_queue_lock[tier] == True:
+        if queue_lock[tier] == True:
             await interaction.response.send_message(
                 "Another user tried to join the queue at the same time, causing your command to fail. Please try again.",
                 ephemeral=True,
@@ -228,7 +230,7 @@ class queue_handler(commands.Cog):
             )
 
         else:
-            race_condition_queue_lock[tier] = True
+            queue_lock[tier] = True
 
             queue[tier][user.id] = round(time.time())
 
@@ -294,25 +296,34 @@ class queue_handler(commands.Cog):
                 embed.description = f"{user.mention} has joined the queue."
                 await interaction.response.send_message(embed=embed)
 
-            race_condition_queue_lock[tier] = False
+            queue_lock[tier] = False
 
             log_event(
                 [
                     round(time.time(), 2),
                     time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                     "Queue",
-                    f"{user.name} [{user.id}] has been added to the {queue_channel.name[:-6]} queue ({len(queue[tier])} in queue)",
+                    f"{user.name} [{user.id}] has been added to the {tier} queue ({len(queue[tier])} in queue)",
                 ]
             )
 
             if len(queue[tier]) == 6:
-                # Crude method of picking a game id which isn't already the id of another active queue
-                game_id = "RLI" + str(random.randint(1, 10))
+                with open("json/game_log.json", "r") as read_file:
+                    game_log = json.load(read_file)
 
-                while game_id in active_queues:
-                    game_id = "RLI" + str(random.randint(1, 10))
+                # Crude method of picking a game id which hasn't been used before
+                date = datetime.now(pytz.timezone("Europe/Dublin")).strftime("%d%m%y")
+                game_id = "RLI" + str(random.randint(1, 10)) + "-" + date
+
+                while (
+                    game_id in active_queues
+                    or game_id in game_log["live"]
+                    or game_id in game_log["complete"]
+                ):
+                    game_id = "RLI" + str(random.randint(1, 10)) + "-" + date
 
                 active_queues[game_id] = {
+                    "tier": tier,
                     "players": list(queue[tier].keys()),
                     "voted": [],
                     "random": 0,
@@ -605,6 +616,7 @@ class Team_Picker(discord.ui.View):
     # Generate two teams from a given queue and team type
     async def make_teams(self, interaction, game_id, team_type):
         queue = active_queues[game_id]["players"]
+        print(active_queues[game_id])
         if team_type == "random":
             # TODO: Current setup is 'simple random' - eventually this should ensure that the teams aren't identical to the previous match if the same players are in the queue
             random.shuffle(queue)
@@ -614,11 +626,27 @@ class Team_Picker(discord.ui.View):
             team1 = []
             team2 = []
         elif team_type == "balanced":
-            await interaction.followup.send("Test")
             team1 = []
             team2 = []
 
-        return team1, team2
+        with open("json/game_log.json", "r") as read_file:
+            game_log = json.load(read_file)
+
+        game_log["live"][game_id] = {
+            "timestamp": time.time(),
+            "tier": active_queues[game_id]["tier"],
+            "team1": team1,
+            "team2": team2,
+            "winner": None,
+            "loser": None,
+            "p1_win": None,
+            "p2_win": None,
+        }
+
+        with open("json/game_log.json", "w") as write_file:
+            json.dump(game_log, write_file, indent=2)
+
+        await interaction.followup.send(f"Team1: {team1}\nTeam2: {team2}")
 
     async def on_timeout(self):
         embed = discord.Embed(
@@ -680,11 +708,8 @@ class Team_Picker(discord.ui.View):
                             f"Making {team_type} teams for {self.game_id}",
                         ]
                     )
-                    team1, team2 = await self.make_teams(
-                        interaction, self.game_id, team_type
-                    )
-                    print(team1)
-                    print(team2)
+                    await self.make_teams(interaction, self.game_id, team_type)
+
             else:
                 await interaction.followup.send(
                     "You have already voted.", ephemeral=True
@@ -739,11 +764,8 @@ class Team_Picker(discord.ui.View):
                             f"Making {team_type} teams for {self.game_id}",
                         ]
                     )
-                    team1, team2 = await self.make_teams(
-                        interaction, self.game_id, team_type
-                    )
-                    print(team1)
-                    print(team2)
+                    await self.make_teams(interaction, self.game_id, team_type)
+
             else:
                 await interaction.followup.send(
                     "You have already voted.", ephemeral=True
@@ -807,11 +829,8 @@ class Team_Picker(discord.ui.View):
                             f"Making {team_type} teams for {self.game_id}",
                         ]
                     )
-                    team1, team2 = await self.make_teams(
-                        interaction, self.game_id, team_type
-                    )
-                    print(team1)
-                    print(team2)
+                    await self.make_teams(interaction, self.game_id, team_type)
+
             else:
                 await interaction.followup.send(
                     "You have already voted.", ephemeral=True
