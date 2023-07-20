@@ -626,12 +626,12 @@ class Team_Picker(discord.ui.View):
         with open("json/player_data.json", "r") as read_file:
             player_data = json.load(read_file)
 
-        queue = active_queues[game_id]["players"]
+        current_queue = active_queues[game_id]["players"]
         if team_type == "random":
             # TODO: Current setup is 'simple random' - eventually this should ensure that the teams aren't identical to the previous match if the same players are in the queue
             random.shuffle(queue)
-            team1 = [queue[0], queue[1], queue[2]]
-            team2 = [queue[3], queue[4], queue[5]]
+            team1 = [current_queue[0], current_queue[1], current_queue[2]]
+            team2 = [current_queue[3], current_queue[4], current_queue[5]]
         elif team_type == "captains":
             team1 = []
             team2 = []
@@ -639,7 +639,7 @@ class Team_Picker(discord.ui.View):
         elif team_type == "balanced":
             # Calculate the total elo of all the players in the lobby - half of this is the 'target elo' for each team
             total_elo = 0
-            for player in queue:
+            for player in current_queue:
                 if str(player) in player_data[tier]:
                     total_elo += player_data[tier][str(player)]["elo"]
                 else:
@@ -647,7 +647,7 @@ class Team_Picker(discord.ui.View):
 
             # Get all the possible 3 person teams from the 6 players - there are 20 such combinations (6C3)
             # Technically only 10 of these are needed, as team makeup of players (1,2,3) is a mirror of (4,5,6), but performance gains would be negligible
-            team_combinations = list(itertools.combinations(queue, r=3))
+            team_combinations = list(itertools.combinations(current_queue, r=3))
 
             # Go through each team combination and find the absolute difference between that combinations elo and the target elo
             # The smallest difference represents the 'fairest' team makeup
@@ -667,7 +667,7 @@ class Team_Picker(discord.ui.View):
                     team1 = list(team_combination)
 
             team2 = []
-            for player in queue:
+            for player in current_queue:
                 if player not in team1:
                     team2.append(player)
 
@@ -721,7 +721,7 @@ class Team_Picker(discord.ui.View):
         )
         teams_embed.add_field(
             name="**Match Creator:**",
-            value=f"{self.bot.get_user(random.choice(queue)).name}",
+            value=f"{self.bot.get_user(random.choice(current_queue)).name}",
             inline=False,
         )
         teams_embed.set_footer(
