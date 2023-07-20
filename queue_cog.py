@@ -26,6 +26,7 @@ CHAMPIONSHIP_LOGS = config["CHANNELS"]["CHAMPIONSHIP_LOGS"]
 CASUAL_LOGS = config["CHANNELS"]["CASUAL_LOGS"]
 
 ELO_SENSITIVITY = 200
+TEAM_PICKER_COLOURS = {"random": 0xDA373C, "captains": 0x5865F2, "balanced": 0x248046}
 
 # 5/6 players queued for ease of testing
 queue = {
@@ -48,6 +49,7 @@ queue_lock = {
     "casual": False,
 }
 view_messages = []
+resolved_team_picker_messages = []
 
 
 def log_event(event):
@@ -345,12 +347,13 @@ class queue_handler(commands.Cog):
 
                 queue[tier] = {}
 
-                embed = discord.Embed(title=f"Queue has been reset.", color=0xFF8B00)
-                embed.set_footer(
-                    text=f"When's the next one...?",
-                    icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
-                )
-                await queue_channel.send(embed=embed)
+                # Remove?
+                # embed = discord.Embed(title=f"Queue has been reset.", color=0xFF8B00)
+                # embed.set_footer(
+                #    text=f"When's the next one...?",
+                #    icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                # )
+                # await queue_channel.send(embed=embed)
 
                 log_event(
                     [
@@ -589,7 +592,7 @@ class queue_handler(commands.Cog):
 
 class Team_Picker(discord.ui.View):
     def __init__(self, bot, game_id: str):
-        super().__init__(timeout=300)
+        super().__init__(timeout=10)
         self.game_id = game_id
         self.bot = bot
 
@@ -629,7 +632,7 @@ class Team_Picker(discord.ui.View):
         current_queue = active_queues[game_id]["players"]
         if team_type == "random":
             # TODO: Current setup is 'simple random' - eventually this should ensure that the teams aren't identical to the previous match if the same players are in the queue
-            random.shuffle(queue)
+            random.shuffle(current_queue)
             team1 = [current_queue[0], current_queue[1], current_queue[2]]
             team2 = [current_queue[3], current_queue[4], current_queue[5]]
         elif team_type == "captains":
@@ -731,16 +734,19 @@ class Team_Picker(discord.ui.View):
         await interaction.followup.send(" ".join(mention_players), embed=teams_embed)
 
     async def on_timeout(self):
-        embed = discord.Embed(
-            title="Queue Timed Out",
-            description="The queue has been voided due to inactivity.",
-            color=0xFF0000,
-        )
-        embed.set_footer(
-            text=f"Requeue if you still wish to play",
-            icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
-        )
-        await view_messages[0].edit(content="", embed=embed, view=None)
+        if view_messages[0].id not in resolved_team_picker_messages:
+            embed = discord.Embed(
+                title="Queue Timed Out",
+                description="The queue has been voided due to inactivity.",
+                color=0xFF0000,
+            )
+            embed.set_footer(
+                text=f"Requeue if you still wish to play",
+                icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+            )
+            await view_messages[0].edit(content="", embed=embed, view=None)
+        else:
+            resolved_team_picker_messages.remove(view_messages[0].id)
         view_messages.pop(0)
 
     @discord.ui.button(label="Random (0)", style=discord.ButtonStyle.red)
@@ -765,9 +771,8 @@ class Team_Picker(discord.ui.View):
                 )
                 button.label = f"Random ({active_queues[self.game_id]['random']})"
 
-                await interaction.followup.send(
-                    "You have voted for random teams.", ephemeral=True
-                )
+                # Remove?
+                # await interaction.followup.send("You have voted for random teams.", ephemeral=True)
                 await interaction.followup.edit_message(
                     message_id=message.id, view=self
                 )
@@ -789,6 +794,18 @@ class Team_Picker(discord.ui.View):
                             "Queue",
                             f"Making {team_type} teams for {self.game_id}",
                         ]
+                    )
+                    resolved_team_picker_messages.append(message.id)
+                    embed = discord.Embed(
+                        title=f"{team_type.capitalize()} teams have been chosen",
+                    )
+                    embed.color = TEAM_PICKER_COLOURS[team_type]
+                    embed.set_footer(
+                        text=f"GLHF",
+                        icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                    )
+                    await interaction.edit_original_response(
+                        content="", embed=embed, view=None
                     )
                     await self.make_teams(interaction, self.game_id, team_type)
 
@@ -821,9 +838,8 @@ class Team_Picker(discord.ui.View):
                 )
                 button.label = f"Captains ({active_queues[self.game_id]['captains']})"
 
-                await interaction.followup.send(
-                    "You have voted for captains teams.", ephemeral=True
-                )
+                # Remove?
+                # await interaction.followup.send("You have voted for captains teams.", ephemeral=True)
                 await interaction.followup.edit_message(
                     message_id=message.id, view=self
                 )
@@ -845,6 +861,18 @@ class Team_Picker(discord.ui.View):
                             "Queue",
                             f"Making {team_type} teams for {self.game_id}",
                         ]
+                    )
+                    resolved_team_picker_messages.append(message.id)
+                    embed = discord.Embed(
+                        title=f"{team_type.capitalize()} teams have been chosen",
+                    )
+                    embed.color = TEAM_PICKER_COLOURS[team_type]
+                    embed.set_footer(
+                        text=f"GLHF",
+                        icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                    )
+                    await interaction.edit_original_response(
+                        content="", embed=embed, view=None
                     )
                     await self.make_teams(interaction, self.game_id, team_type)
 
@@ -886,9 +914,8 @@ class Team_Picker(discord.ui.View):
                 )
                 button.label = f"Balanced ({active_queues[self.game_id]['balanced']})"
 
-                await interaction.followup.send(
-                    "You have voted for balanced teams.", ephemeral=True
-                )
+                # Remove?
+                # await interaction.followup.send("You have voted for balanced teams.", ephemeral=True)
                 await interaction.followup.edit_message(
                     message_id=message.id, view=self
                 )
@@ -911,8 +938,19 @@ class Team_Picker(discord.ui.View):
                             f"Making {team_type} teams for {self.game_id}",
                         ]
                     )
+                    resolved_team_picker_messages.append(message.id)
+                    embed = discord.Embed(
+                        title=f"{team_type.capitalize()} teams have been chosen",
+                    )
+                    embed.color = TEAM_PICKER_COLOURS[team_type]
+                    embed.set_footer(
+                        text=f"GLHF",
+                        icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                    )
+                    await interaction.edit_original_response(
+                        content="", embed=embed, view=None
+                    )
                     await self.make_teams(interaction, self.game_id, team_type)
-
             else:
                 await interaction.followup.send(
                     "You have already voted.", ephemeral=True
