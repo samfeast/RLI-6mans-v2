@@ -8,6 +8,7 @@ import time
 import csv
 from datetime import datetime
 import pytz
+import itertools
 
 with open("json/config.json", "r") as read_file:
     config = json.load(read_file)
@@ -315,7 +316,7 @@ class queue_handler(commands.Cog):
 
                 # Crude method of picking a game id which hasn't been used before
                 date = datetime.now(pytz.timezone("Europe/Dublin")).strftime("%d%m%y")
-                game_id = "RLI" + str(random.randint(1, 10)) + "-" + date
+                game_id = "RLI" + str(random.randint(1, 999)) + "-" + date
 
                 while (
                     game_id in active_queues
@@ -631,9 +632,41 @@ class Team_Picker(discord.ui.View):
         elif team_type == "captains":
             team1 = []
             team2 = []
+
         elif team_type == "balanced":
-            team1 = []
+            # Calculate the total elo of all the players in the lobby - half of this is the 'target elo' for each team
+            total_elo = 0
+            for player in queue:
+                if str(player) in player_data[tier]:
+                    total_elo += player_data[tier][str(player)]["elo"]
+                else:
+                    total_elo += 1000
+
+            # Get all the possible 3 person teams from the 6 players - there are 20 such combinations (6C3)
+            # Technically only 10 of these are needed, as team makeup of players (1,2,3) is a mirror of (4,5,6), but performance gains would be negligible
+            team_combinations = list(itertools.combinations(queue, r=3))
+
+            # Go through each team combination and find the absolute difference between that combinations elo and the target elo
+            # The smallest difference represents the 'fairest' team makeup
+            smallest_difference = 999999
+            for team_combination in team_combinations:
+                combination_elo = 0
+                for i in range(3):
+                    if str(team_combination[i]) in player_data[tier]:
+                        combination_elo += player_data[tier][str(team_combination[i])][
+                            "elo"
+                        ]
+                    else:
+                        combination_elo += 1000
+
+                if abs((total_elo / 2) - combination_elo) < smallest_difference:
+                    smallest_difference = abs((total_elo / 2) - combination_elo)
+                    team1 = list(team_combination)
+
             team2 = []
+            for player in queue:
+                if player not in team1:
+                    team2.append(player)
 
         team1_elo = 0
         team2_elo = 0
@@ -644,7 +677,7 @@ class Team_Picker(discord.ui.View):
             else:
                 team1_elo += 1000
             if str(team2_player) in player_data[tier]:
-                team2_elo += player_data[tier][str(team1_player)]["elo"]
+                team2_elo += player_data[tier][str(team2_player)]["elo"]
             else:
                 team2_elo += 1000
 
