@@ -372,7 +372,9 @@ class queue_handler(commands.Cog):
                 )
 
                 message = await queue_channel.send(
-                    " ".join(mention_players), embed=embed, view=Team_Picker(game_id)
+                    " ".join(mention_players),
+                    embed=embed,
+                    view=Team_Picker(self.bot, game_id),
                 )
                 view_messages.append(message)
 
@@ -586,9 +588,10 @@ class queue_handler(commands.Cog):
 
 
 class Team_Picker(discord.ui.View):
-    def __init__(self, game_id: str):
+    def __init__(self, bot, game_id: str):
         super().__init__(timeout=300)
         self.game_id = game_id
+        self.bot = bot
 
     # Check if any of the criteria needed for voting to be resolved have been met, if so return winning team type, else return unresovled
     def resolve_voting(self, game_id):
@@ -701,7 +704,31 @@ class Team_Picker(discord.ui.View):
         with open("json/game_log.json", "w") as write_file:
             json.dump(game_log, write_file, indent=2)
 
-        await interaction.followup.send(f"Team1: {team1}\nTeam2: {team2}")
+        mention_players = []
+        for player in active_queues[game_id]["players"]:
+            mention_players.append(self.bot.get_user(player).mention)
+
+        teams_embed = discord.Embed(title=f"The Teams!", color=0x83FF00)
+        teams_embed.add_field(
+            name="**-Team 1-**",
+            value=f"{self.bot.get_user(team1[0]).name}, {self.bot.get_user(team1[1]).name}, {self.bot.get_user(team1[2]).name}",
+            inline=False,
+        )
+        teams_embed.add_field(
+            name="**-Team 2-**",
+            value=f"{self.bot.get_user(team2[0]).name}, {self.bot.get_user(team2[1]).name}, {self.bot.get_user(team2[2]).name}",
+            inline=False,
+        )
+        teams_embed.add_field(
+            name="**Match Creator:**",
+            value=f"{self.bot.get_user(random.choice(queue)).name}",
+            inline=False,
+        )
+        teams_embed.set_footer(
+            text=f"Powered by RLI",
+            icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+        )
+        await interaction.followup.send(" ".join(mention_players), embed=teams_embed)
 
     async def on_timeout(self):
         embed = discord.Embed(
