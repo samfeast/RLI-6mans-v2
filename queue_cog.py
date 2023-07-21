@@ -665,14 +665,15 @@ class Team_Picker(discord.ui.View):
                 )
             )
 
-            log_event(
-                [
-                    round(time.time(), 2),
-                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
-                    "Queue",
-                    f"When generating random teams, {len(recent_matches)} recent matches were found {recent_matches}. {len(filtered_matches)} {filtered_matches} contained the same players as the current queue",
-                ]
-            )
+            if filtered_matches != []:
+                log_event(
+                    [
+                        round(time.time(), 2),
+                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                        "Queue",
+                        f"{len(recent_matches)} recent matches found {recent_matches} with {len(filtered_matches)} {filtered_matches} containing the same players as the current queue {game_id}",
+                    ]
+                )
 
             # Keep randomising the teams until it finds a combination that hasn't been seen in any of the filtered matches
             # In theory (but likely never in reality) if all 10 team compositions have been played in the last 3 hours, this won't be able to find a new combination
@@ -709,7 +710,7 @@ class Team_Picker(discord.ui.View):
                         f"ERROR: Failed to find non-repeated random teams in 100 shuffle attempts",
                     ]
                 )
-            elif shuffle_attempts > 0:
+            elif shuffle_attempts > 1:
                 log_event(
                     [
                         round(time.time(), 2),
@@ -860,7 +861,7 @@ class Team_Picker(discord.ui.View):
                         round(time.time(), 2),
                         time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                         "Queue",
-                        f"{interaction.user.name} [{interaction.user.id}] voted for random teams for {self.game_id} (R: {active_queues[self.game_id]['random']}, C: {active_queues[self.game_id]['captains']}, B: {active_queues[self.game_id]['balanced']})",
+                        f"{interaction.user.name} [{interaction.user.id}] voted for random teams in {self.game_id} (R: {active_queues[self.game_id]['random']}, C: {active_queues[self.game_id]['captains']}, B: {active_queues[self.game_id]['balanced']})",
                     ]
                 )
                 button.label = f"Random ({active_queues[self.game_id]['random']})"
@@ -927,7 +928,7 @@ class Team_Picker(discord.ui.View):
                         round(time.time(), 2),
                         time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                         "Queue",
-                        f"{interaction.user.name} [{interaction.user.id}] voted for captains teams for {self.game_id} (R: {active_queues[self.game_id]['random']}, C: {active_queues[self.game_id]['captains']}, B: {active_queues[self.game_id]['balanced']})",
+                        f"{interaction.user.name} [{interaction.user.id}] voted for captains teams in {self.game_id} (R: {active_queues[self.game_id]['random']}, C: {active_queues[self.game_id]['captains']}, B: {active_queues[self.game_id]['balanced']})",
                     ]
                 )
                 button.label = f"Captains ({active_queues[self.game_id]['captains']})"
@@ -994,7 +995,7 @@ class Team_Picker(discord.ui.View):
                         round(time.time(), 2),
                         time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                         "Queue",
-                        f"{interaction.user.name} [{interaction.user.id}] voted for balanced teams for {self.game_id} (R: {active_queues[self.game_id]['random']}, C: {active_queues[self.game_id]['captains']}, B: {active_queues[self.game_id]['balanced']})",
+                        f"{interaction.user.name} [{interaction.user.id}] voted for balanced teams in {self.game_id} (R: {active_queues[self.game_id]['random']}, C: {active_queues[self.game_id]['captains']}, B: {active_queues[self.game_id]['balanced']})",
                     ]
                 )
                 button.label = f"Balanced ({active_queues[self.game_id]['balanced']})"
