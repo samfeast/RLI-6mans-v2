@@ -983,15 +983,6 @@ class Team_Picker(discord.ui.View):
     async def balanced_teams_vote(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
-        log_event(
-            [
-                round(time.time(), 2),
-                time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
-                "Queue",
-                f"{interaction.user.name} [{interaction.user.id}] voted for balanced teams for {self.game_id}",
-            ]
-        )
-
         await interaction.response.defer()
         message = await interaction.original_response()
         if interaction.user.id in active_queues[self.game_id]["players"]:
