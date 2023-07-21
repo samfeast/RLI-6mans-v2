@@ -643,20 +643,15 @@ class Team_Picker(discord.ui.View):
             recent_matches = []
             old_matches = 0
             for key in game_log_keys:
-                print(f"------\nNow testing {key}")
                 if current_timestamp - game_log["complete"][key]["timestamp"] < 10800:
-                    print("This match is recent")
                     recent_matches.append(key)
                 else:
                     # It has to find 6 matches which are more than 3 hours old to break out the loop
                     # This is because "timestamp" is set when the match is made, which may not be the order they are reported in
-                    print("This match is old")
                     old_matches += 1
                     if old_matches >= 6:
-                        print(f"{old_matches} old matches identified")
                         break
 
-            print(f"Recent Matches: {recent_matches}")
             # Filter recent_matches to only contain matches containing the same 6 players as the current queue
             filtered_matches = list(
                 (
@@ -670,19 +665,25 @@ class Team_Picker(discord.ui.View):
                 )
             )
 
-            print(f"Filtered Recent Matches: {filtered_matches}")
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Queue",
+                    f"When generating random teams, {len(recent_matches)} recent matches were found {recent_matches}. {len(filtered_matches)} {filtered_matches} contained the same players as the current queue",
+                ]
+            )
 
             # Keep randomising the teams until it finds a combination that hasn't been seen in any of the filtered matches
             # In theory (but likely never in reality) if all 10 team compositions have been played in the last 3 hours, this won't be able to find a new combination
             # If it fails to make unique teams 100 times in a row, it will still return teams that are repeats of a previous queue
             shuffle_attempts = 0
             while shuffle_attempts < 100:
+                shuffle_attempts += 1
+
                 random.shuffle(current_queue)
                 team1 = [current_queue[0], current_queue[1], current_queue[2]]
                 team2 = [current_queue[3], current_queue[4], current_queue[5]]
-                print(
-                    f"\n--------\nTeams Randomised:\n\tTeam1: {team1}\n\tTeam2: {team2}"
-                )
 
                 count_unique = 0
                 for key in filtered_matches:
@@ -691,20 +692,32 @@ class Team_Picker(discord.ui.View):
                     if sorted(team1) == sorted(
                         game_log["complete"][key]["team1"]
                     ) or sorted(team1) == sorted(game_log["complete"][key]["team2"]):
-                        print(f"These teams were seen in {key}, breaking")
                         break
                     else:
-                        print(f"These teams are different to {key}")
                         count_unique += 1
                 # This condition is met when the current team1 and team2 are different to the team setups in ALL of the filtered matches
                 # When this is met we know we have teams which have not been seen in the last 3 hours, so can stop shuffling
                 if count_unique == len(filtered_matches):
-                    print(
-                        f"There were {len(filtered_matches)} filtered matches - {count_unique} of them are different to the current combination - breaking"
-                    )
                     break
 
-            print(f"\n\tTeams Confirmed!\n\t\tTeam1: {team1}\n\t\tTeam2: {team2}")
+            if shuffle_attempts == 100:
+                log_event(
+                    [
+                        round(time.time(), 2),
+                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                        "Queue",
+                        f"ERROR: Failed to find non-repeated random teams in 100 shuffle attempts",
+                    ]
+                )
+            elif shuffle_attempts > 0:
+                log_event(
+                    [
+                        round(time.time(), 2),
+                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                        "Queue",
+                        f"Shuffled teams {shuffle_attempts-1} time(s) to find non-repeated random teams",
+                    ]
+                )
 
         elif team_type == "captains":
             team1 = []
@@ -804,6 +817,15 @@ class Team_Picker(discord.ui.View):
             icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
         )
         await interaction.followup.send(" ".join(mention_players), embed=teams_embed)
+
+        log_event(
+            [
+                round(time.time(), 2),
+                time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                "Queue",
+                f"Teams created for {game_id}. Team1: {team1}, Team2: {team2}",
+            ]
+        )
 
     async def on_timeout(self):
         if view_messages[0].id not in resolved_team_picker_messages:
