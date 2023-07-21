@@ -592,7 +592,7 @@ class queue_handler(commands.Cog):
 
 class Team_Picker(discord.ui.View):
     def __init__(self, bot, game_id: str):
-        super().__init__(timeout=10)
+        super().__init__(timeout=300)
         self.game_id = game_id
         self.bot = bot
 
@@ -631,10 +631,81 @@ class Team_Picker(discord.ui.View):
 
         current_queue = active_queues[game_id]["players"]
         if team_type == "random":
-            # TODO: Current setup is 'simple random' - eventually this should ensure that the teams aren't identical to the previous match if the same players are in the queue
-            random.shuffle(current_queue)
-            team1 = [current_queue[0], current_queue[1], current_queue[2]]
-            team2 = [current_queue[3], current_queue[4], current_queue[5]]
+            with open("json/game_log.json", "r") as read_file:
+                game_log = json.load(read_file)
+
+            # Makes a list containing all the game IDs of completed series, and reverses it so that most recently reported series are at the front of the list
+            game_log_keys = list(game_log["complete"].keys())
+            game_log_keys.reverse()
+
+            # Get a list of game IDs of series started within the last 10800 seconds (3 hours)
+            current_timestamp = round(time.time())
+            recent_matches = []
+            old_matches = 0
+            for key in game_log_keys:
+                print(f"------\nNow testing {key}")
+                if current_timestamp - game_log["complete"][key]["timestamp"] < 10800:
+                    print("This match is recent")
+                    recent_matches.append(key)
+                else:
+                    # It has to find 6 matches which are more than 3 hours old to break out the loop
+                    # This is because "timestamp" is set when the match is made, which may not be the order they are reported in
+                    print("This match is old")
+                    old_matches += 1
+                    if old_matches >= 6:
+                        print(f"{old_matches} old matches identified")
+                        break
+
+            print(f"Recent Matches: {recent_matches}")
+            # Filter recent_matches to only contain matches containing the same 6 players as the current queue
+            filtered_matches = list(
+                (
+                    key
+                    for key in recent_matches
+                    if sorted(current_queue)
+                    == sorted(
+                        game_log["complete"][key]["team1"]
+                        + game_log["complete"][key]["team2"]
+                    )
+                )
+            )
+
+            print(f"Filtered Recent Matches: {filtered_matches}")
+
+            # Keep randomising the teams until it finds a combination that hasn't been seen in any of the filtered matches
+            # In theory (but likely never in reality) if all 10 team compositions have been played in the last 3 hours, this won't be able to find a new combination
+            # If it fails to make unique teams 100 times in a row, it will still return teams that are repeats of a previous queue
+            shuffle_attempts = 0
+            while shuffle_attempts < 100:
+                random.shuffle(current_queue)
+                team1 = [current_queue[0], current_queue[1], current_queue[2]]
+                team2 = [current_queue[3], current_queue[4], current_queue[5]]
+                print(
+                    f"\n--------\nTeams Randomised:\n\tTeam1: {team1}\n\tTeam2: {team2}"
+                )
+
+                count_unique = 0
+                for key in filtered_matches:
+                    # Check if team1 in the current queue is the same as EITHER team1 or team2 in a recent queue
+                    # N.B: If team1 appears in a recent queue, team2 MUST as well, as we're only going through matches containing the same 6 players
+                    if sorted(team1) == sorted(
+                        game_log["complete"][key]["team1"]
+                    ) or sorted(team1) == sorted(game_log["complete"][key]["team2"]):
+                        print(f"These teams were seen in {key}, breaking")
+                        break
+                    else:
+                        print(f"These teams are different to {key}")
+                        count_unique += 1
+                # This condition is met when the current team1 and team2 are different to the team setups in ALL of the filtered matches
+                # When this is met we know we have teams which have not been seen in the last 3 hours, so can stop shuffling
+                if count_unique == len(filtered_matches):
+                    print(
+                        f"There were {len(filtered_matches)} filtered matches - {count_unique} of them are different to the current combination - breaking"
+                    )
+                    break
+
+            print(f"\n\tTeams Confirmed!\n\t\tTeam1: {team1}\n\t\tTeam2: {team2}")
+
         elif team_type == "captains":
             team1 = []
             team2 = []
@@ -649,11 +720,11 @@ class Team_Picker(discord.ui.View):
                     total_elo += 1000
 
             # Get all the possible 3 person teams from the 6 players - there are 20 such combinations (6C3)
-            # Technically only 10 of these are needed, as team makeup of players (1,2,3) is a mirror of (4,5,6), but performance gains would be negligible
+            # Technically only 10 of these are needed, as a team makeup of players (1,2,3) is a mirror of (4,5,6), but performance gains would be negligible
             team_combinations = list(itertools.combinations(current_queue, r=3))
 
             # Go through each team combination and find the absolute difference between that combinations elo and the target elo
-            # The smallest difference represents the 'fairest' team makeup
+            # The combination with the smallest difference represents the 'fairest' team makeup
             smallest_difference = 999999
             for team_combination in team_combinations:
                 combination_elo = 0
@@ -696,6 +767,7 @@ class Team_Picker(discord.ui.View):
         game_log["live"][game_id] = {
             "timestamp": round(time.time()),
             "tier": active_queues[game_id]["tier"],
+            "team_type": team_type,
             "team1": team1,
             "team2": team2,
             "winner": None,
