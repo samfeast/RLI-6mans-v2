@@ -25,7 +25,7 @@ PREMIER_LOGS = config["CHANNELS"]["PREMIER_LOGS"]
 CHAMPIONSHIP_LOGS = config["CHANNELS"]["CHAMPIONSHIP_LOGS"]
 CASUAL_LOGS = config["CHANNELS"]["CASUAL_LOGS"]
 
-ELO_SENSITIVITY = 200
+ELO_SENSITIVITY = config["ELO_SENSITIVITY"]
 TEAM_PICKER_COLOURS = {"random": 0xDA373C, "captains": 0x5865F2, "balanced": 0x248046}
 
 # 5/6 players queued for ease of testing
@@ -782,7 +782,7 @@ class Team_Picker(discord.ui.View):
             "loser": None,
             "p1_win": p1_win,
             "p2_win": p2_win,
-            "elo_change": None,
+            "elo_swing": None,
         }
 
         with open("json/game_log.json", "w") as write_file:
