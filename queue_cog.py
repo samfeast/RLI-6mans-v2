@@ -641,16 +641,9 @@ class Team_Picker(discord.ui.View):
             # Get a list of game IDs of series started within the last 10800 seconds (3 hours)
             current_timestamp = round(time.time())
             recent_matches = []
-            old_matches = 0
             for key in game_log_keys:
-                if current_timestamp - game_log["complete"][key]["timestamp"] < 10800:
+                if current_timestamp - game_log["complete"][key]["reported"] < 10800:
                     recent_matches.append(key)
-                else:
-                    # It has to find 6 matches which are more than 3 hours old to break out the loop
-                    # This is because "timestamp" is set when the match is made, which may not be the order they are reported in
-                    old_matches += 1
-                    if old_matches >= 6:
-                        break
 
             # Filter recent_matches to only contain matches containing the same 6 players as the current queue
             filtered_matches = list(
@@ -779,7 +772,8 @@ class Team_Picker(discord.ui.View):
             game_log = json.load(read_file)
 
         game_log["live"][game_id] = {
-            "timestamp": round(time.time()),
+            "created": round(time.time()),
+            "reported": None,
             "tier": active_queues[game_id]["tier"],
             "team_type": team_type,
             "team1": team1,
@@ -788,6 +782,7 @@ class Team_Picker(discord.ui.View):
             "loser": None,
             "p1_win": p1_win,
             "p2_win": p2_win,
+            "elo_change": None,
         }
 
         with open("json/game_log.json", "w") as write_file:
