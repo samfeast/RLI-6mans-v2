@@ -1,6 +1,6 @@
 from asyncore import write
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 import json
 import random
@@ -31,13 +31,19 @@ TEAM_PICKER_COLOURS = {"random": 0xDA373C, "captains": 0x5865F2, "balanced": 0x2
 # 5/6 players queued for ease of testing
 queue = {
     "elite": {
-        935182920019234887: 1,
+        935182920019234887: 1690139222,
         1104162909120110603: 2,
         865798504714338324: 3,
         988906946725822484: 4,
         963466636059365476: 5,
     },
-    "premier": {},
+    "premier": {
+        935182920019234887: 1690139222,
+        1104162909120110603: 2,
+        865798504714338324: 3,
+        988906946725822484: 4,
+        963466636059365476: 5,
+    },
     "championship": {},
     "casual": {},
 }
@@ -61,6 +67,7 @@ def log_event(event):
 class queue_handler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.queue_reminder.start()
 
     # Ping cog command
     @app_commands.command(description="Ping the queue cog.")
@@ -75,6 +82,64 @@ class queue_handler(commands.Cog):
             ]
         )
         await interaction.response.send_message("Pong!", ephemeral=True)
+
+    @tasks.loop(seconds=5.0)
+    async def queue_reminder(self):
+        with open("json/member_info.json", "r") as read_file:
+            member_info = json.load(read_file)
+
+        custom_reminders = {}
+        force_removals = {}
+
+        for tier in list(queue.keys()):
+            for player in queue[tier]:
+                time_delta = time.time() - queue[tier][player]
+                if time_delta > 14400:
+                    if player in force_removals:
+                        force_removals[player].append(tier)
+                    else:
+                        force_removals[player] = [tier]
+                else:
+                    if str(player) in member_info:
+                        if member_info[str(player)]["reminder"] != None:
+                            if (
+                                time_delta
+                                > member_info[str(player)]["reminder"]["interval"]
+                            ):
+                                if player in custom_reminders:
+                                    custom_reminders[player].append(tier)
+                                else:
+                                    custom_reminders[player] = [tier]
+
+        await self.force_remove(force_removals)
+        await self.custom_remove(custom_reminders)
+
+    async def force_remove(self, players):
+        for player in players:
+            for tier in players[player]:
+                if tier == "elite":
+                    tier_channel = self.bot.get_channel(ELITE)
+                    try:
+                        player_user = self.bot.get_user(player)
+                        embed = discord.Embed(
+                            title="Removed for inactivity",
+                            description=f"{player_user.name} has been removed from the queue due to inactivity",
+                            color=0xFF0000,
+                        )
+                        embed.set_footer(
+                            text="Rejoin the queue if you still wish to play",
+                            icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                        )
+                        await tier_channel.send(
+                            f"||{player_user.mention}||", embed=embed
+                        )
+                        del queue[tier][player]
+                    except AttributeError:
+                        print("Exception")
+                        pass
+
+    async def custom_remove(self, players):
+        pass
 
     # Join queue
     @app_commands.command(description="Join the queue.")
