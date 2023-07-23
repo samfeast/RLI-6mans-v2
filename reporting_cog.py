@@ -14,6 +14,7 @@ with open("json/config.json", "r") as read_file:
 GUILD_ID = config["GUILD_ID"]
 ELO_GAIN = config["ELO_GAIN"]
 POINTS_FOR_WIN = config["POINTS_FOR_WIN"]
+POINTS_FOR_LOSS = config["POINTS_FOR_LOSS"]
 
 
 def log_event(event):
@@ -129,12 +130,44 @@ class reporting(commands.Cog):
             with open("json/game_log.json", "w") as write_file:
                 json.dump(game_log, write_file, indent=2)
 
-            winning_players = []
-            losing_players = []
+            with open("json/player_data.json", "r") as read_file:
+                player_data = json.load(read_file)
+
+            mention_winning_players = []
+            mention_losing_players = []
             for player in game_dict[winner]:
-                winning_players.append(self.bot.get_user(player).name)
+                mention_winning_players.append(self.bot.get_user(player).name)
+                if str(player) in player_data[game_dict["tier"]]:
+                    player_data[game_dict["tier"]][str(player)]["wins"] += 1
+                    player_data[game_dict["tier"]][str(player)][
+                        "points"
+                    ] += POINTS_FOR_WIN
+                    player_data[game_dict["tier"]][str(player)]["elo"] += elo_swing
+                else:
+                    player_data[game_dict["tier"]][str(player)] = {
+                        "wins": 1,
+                        "losses": 0,
+                        "points": POINTS_FOR_WIN,
+                        "elo": 1000 + elo_swing,
+                    }
             for player in game_dict[loser]:
-                losing_players.append(self.bot.get_user(player).name)
+                mention_losing_players.append(self.bot.get_user(player).name)
+                if str(player) in player_data[game_dict["tier"]]:
+                    player_data[game_dict["tier"]][str(player)]["losses"] += 1
+                    player_data[game_dict["tier"]][str(player)][
+                        "points"
+                    ] -= POINTS_FOR_LOSS
+                    player_data[game_dict["tier"]][str(player)]["elo"] -= elo_swing
+                else:
+                    player_data[game_dict["tier"]][str(player)] = {
+                        "wins": 0,
+                        "losses": 1,
+                        "points": -POINTS_FOR_LOSS,
+                        "elo": 1000 + elo_swing,
+                    }
+
+            with open("json/player_data.json", "w") as write_file:
+                json.dump(player_data, write_file, indent=2)
 
             embed = discord.Embed(
                 title=f"{game_dict['tier'].capitalize()} Game: {game_id.split('-')[0]}",
@@ -142,12 +175,12 @@ class reporting(commands.Cog):
             )
             embed.add_field(
                 name="Winning Team",
-                value=", ".join(player for player in winning_players),
+                value=", ".join(player for player in mention_winning_players),
                 inline=False,
             )
             embed.add_field(
                 name="Losing Team",
-                value=", ".join(player for player in losing_players),
+                value=", ".join(player for player in mention_losing_players),
                 inline=False,
             )
             embed.set_footer(
