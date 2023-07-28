@@ -31,18 +31,18 @@ TEAM_PICKER_COLOURS = {"random": 0xDA373C, "captains": 0x5865F2, "balanced": 0x2
 # 5/6 players queued for ease of testing
 queue = {
     "elite": {
-        797201172792344616: 1690512813,
-        1104162909120110603: 1690512813,
-        865798504714338324: 3,
-        988906946725822484: 4,
-        963466636059365476: 5,
+        797201172792344616: 1690560774,
+        1104162909120110603: 1690556091,
+        865798504714338324: 1690556091,
+        988906946725822484: 1690556091,
+        963466636059365476: 1690556091,
     },
     "premier": {
-        797201172792344616: 1690512813,
-        1104162909120110603: 2,
-        865798504714338324: 3,
-        988906946725822484: 4,
-        963466636059365476: 5,
+        797201172792344616: 1690556091,
+        1104162909120110603: 1690556091,
+        865798504714338324: 1690556091,
+        988906946725822484: 1690556091,
+        963466636059365476: 1690556091,
     },
     "championship": {},
     "casual": {},
@@ -95,6 +95,8 @@ class queue_handler(commands.Cog):
         for tier in list(queue.keys()):
             for player in queue[tier]:
                 time_delta = time.time() - queue[tier][player]
+                # Once 14400 seconds (4 hours) have elapsed players are forcibly removed from the queue - this value can be changed
+                # NOTE: For users without /reminder set up, the 'elapsed' field must be greater than this 14400 value to avoid errors
                 if time_delta > 14400:
                     if player in removal_notices:
                         removal_notices[player].append(tier)
@@ -116,14 +118,7 @@ class queue_handler(commands.Cog):
                                     ping_notices[player] = [tier]
 
         if len(dm_notices) + len(ping_notices) + len(removal_notices) == 0:
-            log_event(
-                [
-                    round(time.time(), 2),
-                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
-                    "Queue",
-                    f"Reminder task loop completed with no notices required",
-                ]
-            )
+            pass
         else:
             log_event(
                 [
@@ -160,7 +155,7 @@ class queue_handler(commands.Cog):
                 embed.description = (
                     f"You are still in the {' and '.join(dm_notices[player])} queue"
                 )
-                embed.color = 0xFF8B00
+                embed.color = 0x0062FF
                 for tier in dm_notices[player]:
                     queue[tier][player] = round(time.time())
             elif member_info[str(player)]["reminder"]["type"] == "Remove":
@@ -222,7 +217,7 @@ class queue_handler(commands.Cog):
                 embed.description = (
                     f"{player_user.mention} - you are still in the queue"
                 )
-                embed.color = 0xFF8B00
+                embed.color = 0x0062FF
                 for tier in ping_notices[player]:
                     queue[tier][player] = round(time.time())
                     if tier == "elite":
@@ -609,28 +604,37 @@ class queue_handler(commands.Cog):
                     ]
                 )
 
-                queue[tier] = {}
+                mention_players = []
+                for player in active_queues[game_id]["players"]:
+                    player_user = self.bot.get_user(player)
+                    mention_players.append(player_user.mention)
+                    if player in queue["elite"] and tier != "elite":
+                        await self.remove_from_queue(
+                            None, player_user, "elite", ELITE, True
+                        )
+                    if player in queue["premier"] and tier != "premier":
+                        await self.remove_from_queue(
+                            None, player_user, "premier", PREMIER, True
+                        )
+                    if player in queue["championship"] and tier != "championship":
+                        await self.remove_from_queue(
+                            None, player_user, "championship", CHAMPIONSHIP, True
+                        )
+                    if player in queue["casual"] and tier != "casual":
+                        await self.remove_from_queue(
+                            None, player_user, "casual", CASUAL, True
+                        )
 
-                # Remove?
-                # embed = discord.Embed(title=f"Queue has been reset.", color=0xFF8B00)
-                # embed.set_footer(
-                #    text=f"When's the next one...?",
-                #    icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
-                # )
-                # await queue_channel.send(embed=embed)
+                queue[tier] = {}
 
                 log_event(
                     [
                         round(time.time(), 2),
                         time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                         "Queue",
-                        f"Team Picker view launched for {game_id}",
+                        f"Launching team picker view for {game_id}",
                     ]
                 )
-
-                mention_players = []
-                for player in active_queues[game_id]["players"]:
-                    mention_players.append(self.bot.get_user(player).mention)
 
                 embed = discord.Embed(title="Choose team type!", color=0xFFFFFF)
                 embed.set_footer(
@@ -1055,31 +1059,69 @@ class Team_Picker(discord.ui.View):
         with open("json/game_log.json", "w") as write_file:
             json.dump(game_log, write_file, indent=2)
 
-        mention_players = []
-        for player in active_queues[game_id]["players"]:
-            mention_players.append(self.bot.get_user(player).mention)
+        match_creator = random.choice(current_queue)
 
-        teams_embed = discord.Embed(title=f"The Teams!", color=0x83FF00)
-        teams_embed.add_field(
+        mention_players = []
+        for player in current_queue:
+            player_user = self.bot.get_user(player)
+            mention_players.append(player_user.mention)
+
+            embed = discord.Embed(title=f"The Teams!", color=0x83FF00)
+            embed.add_field(
+                name="**-Team 1-**",
+                value=f"{self.bot.get_user(team1[0]).name}, {self.bot.get_user(team1[1]).name}, {self.bot.get_user(team1[2]).name}",
+                inline=False,
+            )
+            embed.add_field(
+                name="**-Team 2-**",
+                value=f"{self.bot.get_user(team2[0]).name}, {self.bot.get_user(team2[1]).name}, {self.bot.get_user(team2[2]).name}",
+                inline=False,
+            )
+            embed.add_field(
+                name="**Match Creator:**",
+                value=f"{self.bot.get_user(match_creator).name}",
+                inline=False,
+            )
+
+            embed.add_field(
+                name="**Username:**", value=game_id.split("-")[0], inline=True
+            )
+            embed.add_field(
+                name="**Password:**", value=game_id.split("-")[0], inline=True
+            )
+            try:
+                await player_user.send(embed=embed)
+            except Exception as e:
+                log_event(
+                    [
+                        round(time.time(), 2),
+                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                        "Queue",
+                        f"Unable to DM teams to {player_user.name} [{player_user.id}]: {e}",
+                    ]
+                )
+
+        embed = discord.Embed(title=f"The Teams!", color=0x83FF00)
+        embed.add_field(
             name="**-Team 1-**",
             value=f"{self.bot.get_user(team1[0]).name}, {self.bot.get_user(team1[1]).name}, {self.bot.get_user(team1[2]).name}",
             inline=False,
         )
-        teams_embed.add_field(
+        embed.add_field(
             name="**-Team 2-**",
             value=f"{self.bot.get_user(team2[0]).name}, {self.bot.get_user(team2[1]).name}, {self.bot.get_user(team2[2]).name}",
             inline=False,
         )
-        teams_embed.add_field(
+        embed.add_field(
             name="**Match Creator:**",
-            value=f"{self.bot.get_user(random.choice(current_queue)).name}",
+            value=f"{self.bot.get_user(match_creator).name}",
             inline=False,
         )
-        teams_embed.set_footer(
+        embed.set_footer(
             text=f"Powered by RLI",
             icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
         )
-        await interaction.followup.send(" ".join(mention_players), embed=teams_embed)
+        await interaction.followup.send(" ".join(mention_players), embed=embed)
 
         log_event(
             [
@@ -1128,8 +1170,6 @@ class Team_Picker(discord.ui.View):
                 )
                 button.label = f"Random ({active_queues[self.game_id]['random']})"
 
-                # Remove?
-                # await interaction.followup.send("You have voted for random teams.", ephemeral=True)
                 await interaction.followup.edit_message(
                     message_id=message.id, view=self
                 )
@@ -1195,8 +1235,6 @@ class Team_Picker(discord.ui.View):
                 )
                 button.label = f"Captains ({active_queues[self.game_id]['captains']})"
 
-                # Remove?
-                # await interaction.followup.send("You have voted for captains teams.", ephemeral=True)
                 await interaction.followup.edit_message(
                     message_id=message.id, view=self
                 )
@@ -1262,8 +1300,6 @@ class Team_Picker(discord.ui.View):
                 )
                 button.label = f"Balanced ({active_queues[self.game_id]['balanced']})"
 
-                # Remove?
-                # await interaction.followup.send("You have voted for balanced teams.", ephemeral=True)
                 await interaction.followup.edit_message(
                     message_id=message.id, view=self
                 )
