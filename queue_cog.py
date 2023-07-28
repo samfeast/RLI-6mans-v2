@@ -83,6 +83,12 @@ class queue_handler(commands.Cog):
         )
         await interaction.response.send_message("Pong!", ephemeral=True)
 
+    @app_commands.command(description="for testing")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def testing(self, interaction: discord.Interaction):
+        print(active_queues)
+        await interaction.response.send_message("Pong!", ephemeral=True)
+
     @tasks.loop(minutes=2)
     async def queue_reminder(self):
         with open("json/member_info.json", "r") as read_file:
@@ -1063,8 +1069,32 @@ class Team_Picker(discord.ui.View):
 
         mention_players = []
         for player in current_queue:
+            mention_players.append(self.bot.get_user(player).mention)
+
+        embed = discord.Embed(title=f"The Teams!", color=0x83FF00)
+        embed.add_field(
+            name="**-Team 1-**",
+            value=f"{self.bot.get_user(team1[0]).name}, {self.bot.get_user(team1[1]).name}, {self.bot.get_user(team1[2]).name}",
+            inline=False,
+        )
+        embed.add_field(
+            name="**-Team 2-**",
+            value=f"{self.bot.get_user(team2[0]).name}, {self.bot.get_user(team2[1]).name}, {self.bot.get_user(team2[2]).name}",
+            inline=False,
+        )
+        embed.add_field(
+            name="**Match Creator:**",
+            value=f"{self.bot.get_user(match_creator).name}",
+            inline=False,
+        )
+        embed.set_footer(
+            text=f"Powered by RLI",
+            icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+        )
+        await interaction.followup.send(" ".join(mention_players), embed=embed)
+
+        for player in current_queue:
             player_user = self.bot.get_user(player)
-            mention_players.append(player_user.mention)
 
             embed = discord.Embed(title=f"The Teams!", color=0x83FF00)
             embed.add_field(
@@ -1090,7 +1120,9 @@ class Team_Picker(discord.ui.View):
                 name="**Password:**", value=game_id.split("-")[0], inline=True
             )
             try:
-                await player_user.send(embed=embed)
+                await player_user.send(
+                    "**You have 10 minutes to join the lobby.**", embed=embed
+                )
             except Exception as e:
                 log_event(
                     [
@@ -1101,28 +1133,6 @@ class Team_Picker(discord.ui.View):
                     ]
                 )
 
-        embed = discord.Embed(title=f"The Teams!", color=0x83FF00)
-        embed.add_field(
-            name="**-Team 1-**",
-            value=f"{self.bot.get_user(team1[0]).name}, {self.bot.get_user(team1[1]).name}, {self.bot.get_user(team1[2]).name}",
-            inline=False,
-        )
-        embed.add_field(
-            name="**-Team 2-**",
-            value=f"{self.bot.get_user(team2[0]).name}, {self.bot.get_user(team2[1]).name}, {self.bot.get_user(team2[2]).name}",
-            inline=False,
-        )
-        embed.add_field(
-            name="**Match Creator:**",
-            value=f"{self.bot.get_user(match_creator).name}",
-            inline=False,
-        )
-        embed.set_footer(
-            text=f"Powered by RLI",
-            icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
-        )
-        await interaction.followup.send(" ".join(mention_players), embed=embed)
-
         log_event(
             [
                 round(time.time(), 2),
@@ -1131,6 +1141,8 @@ class Team_Picker(discord.ui.View):
                 f"Teams created for {game_id}. Team1: {team1}, Team2: {team2}",
             ]
         )
+
+        del active_queues[game_id]
 
     async def on_timeout(self):
         if view_messages[0].id not in resolved_team_picker_messages:
