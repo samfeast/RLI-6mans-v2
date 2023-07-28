@@ -68,6 +68,7 @@ class queue_handler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.queue_reminder.start()
+        self.cleaner.start()
 
     # Ping cog command
     @app_commands.command(description="Ping the queue cog.")
@@ -82,6 +83,62 @@ class queue_handler(commands.Cog):
             ]
         )
         await interaction.response.send_message("Pong!", ephemeral=True)
+
+    # Removes active queues and unreported games after 1 hour and 8 hours respectively
+    @tasks.loop(minutes=2)
+    async def cleaner(self):
+        current_unix = round(time.time())
+
+        active_queues_to_remove = []
+        live_games_to_remove = []
+
+        for active_queue in active_queues:
+            if current_unix - active_queues[active_queue]["timestamp"] > 3600:
+                active_queues_to_remove.append(active_queue)
+
+        with open("json/game_log.json", "r") as read_file:
+            game_log = json.load(read_file)
+
+        for game in game_log["live"]:
+            if current_unix - game_log["live"][game]["created"] > 28800:
+                live_games_to_remove.append(game)
+
+        for queue in active_queues_to_remove:
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Queue",
+                    f"Deleting {queue} from active queues (1+ hours since creation)",
+                ]
+            )
+            del active_queues[queue]
+        for game in live_games_to_remove:
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Queue",
+                    f"Deleting {game} from live game log (8+ hours since creation)",
+                ]
+            )
+            del game_log["live"][game]
+
+        if len(live_games_to_remove) > 0:
+            with open("json/game_log.json", "w") as write_file:
+                json.dump(game_log, write_file, indent=2)
+
+    @cleaner.before_loop
+    async def before_queue_reminder(self):
+        log_event(
+            [
+                round(time.time(), 2),
+                time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                "Queue",
+                f"Cleaner task loop waiting for bot startup",
+            ]
+        )
+        await self.bot.wait_until_ready()
 
     @tasks.loop(minutes=2)
     async def queue_reminder(self):
@@ -584,9 +641,10 @@ class queue_handler(commands.Cog):
                     or game_id in game_log["live"]
                     or game_id in game_log["complete"]
                 ):
-                    game_id = "RLI" + str(random.randint(1, 10)) + "-" + date
+                    game_id = "RLI" + str(random.randint(1, 999)) + "-" + date
 
                 active_queues[game_id] = {
+                    "timestamp": round(time.time()),
                     "tier": tier,
                     "players": list(queue[tier].keys()),
                     "voted": [],
