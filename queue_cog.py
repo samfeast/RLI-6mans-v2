@@ -83,12 +83,6 @@ class queue_handler(commands.Cog):
         )
         await interaction.response.send_message("Pong!", ephemeral=True)
 
-    @app_commands.command(description="for testing")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
-    async def testing(self, interaction: discord.Interaction):
-        print(active_queues)
-        await interaction.response.send_message("Pong!", ephemeral=True)
-
     @tasks.loop(minutes=2)
     async def queue_reminder(self):
         with open("json/member_info.json", "r") as read_file:
