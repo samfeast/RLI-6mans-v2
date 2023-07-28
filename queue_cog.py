@@ -31,14 +31,14 @@ TEAM_PICKER_COLOURS = {"random": 0xDA373C, "captains": 0x5865F2, "balanced": 0x2
 # 5/6 players queued for ease of testing
 queue = {
     "elite": {
-        797201172792344616: 1690510497,
-        1104162909120110603: 1690510497,
+        797201172792344616: 1690512813,
+        1104162909120110603: 1690512813,
         865798504714338324: 3,
         988906946725822484: 4,
         963466636059365476: 5,
     },
     "premier": {
-        797201172792344616: 1690510497,
+        797201172792344616: 1690512813,
         1104162909120110603: 2,
         865798504714338324: 3,
         988906946725822484: 4,
@@ -91,15 +91,16 @@ class queue_handler(commands.Cog):
 
         dm_notices = {}
         ping_notices = {}
+        removal_notices = {}
 
         for tier in list(queue.keys()):
             for player in queue[tier]:
                 time_delta = time.time() - queue[tier][player]
                 if time_delta > 14400:
-                    if player in ping_notices:
-                        ping_notices[player].append(tier)
+                    if player in removal_notices:
+                        removal_notices[player].append(tier)
                     else:
-                        ping_notices[player] = [tier]
+                        removal_notices[player] = [tier]
                 else:
                     if str(player) in member_info:
                         player_reminder_settings = member_info[str(player)]["reminder"]
@@ -110,17 +111,18 @@ class queue_handler(commands.Cog):
                                 else:
                                     dm_notices[player] = [tier]
                             elif player_reminder_settings["message_type"] == "Ping":
-                                if player in dm_notices:
+                                if player in ping_notices:
                                     ping_notices[player].append(tier)
                                 else:
                                     ping_notices[player] = [tier]
 
         await self.send_dm_notices(member_info, dm_notices)
         await self.send_ping_notices(member_info, ping_notices)
+        await self.send_removal_notices(removal_notices)
 
     async def send_dm_notices(self, member_info, dm_notices):
         for player in dm_notices:
-            print(f"Sending DM notice for {player}")
+            print(f"Sending DM notice for {player} in {dm_notices[player]}")
             player_user = self.bot.get_user(player)
             embed = discord.Embed()
             embed.set_footer(
@@ -165,8 +167,117 @@ class queue_handler(commands.Cog):
             except Exception as e:
                 print(f"Failed to DM {player}: {e}")
 
-    async def send_ping_notices(self, member_info, dm_notices):
-        pass
+    async def send_ping_notices(self, member_info, ping_notices):
+        for player in ping_notices:
+            print(f"Sending Ping notice for {player} in {ping_notices[player]}")
+            player_user = self.bot.get_user(player)
+            embed = discord.Embed()
+            embed.set_footer(
+                text="Change behaviour with /reminder",
+                icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+            )
+            if member_info[str(player)]["reminder"]["type"] == "Reminder":
+                embed.title = "Reminder!"
+                embed.description = (
+                    f"{player_user.mention} - you are still in the queue"
+                )
+                embed.color = 0xFF8B00
+                for tier in ping_notices[player]:
+                    queue[tier][player] = round(time.time())
+                    if tier == "elite":
+                        tier_channel = self.bot.get_channel(ELITE)
+                    elif tier == "premier":
+                        tier_channel = self.bot.get_channel(PREMIER)
+                    elif tier == "championship":
+                        tier_channel = self.bot.get_channel(CHAMPIONSHIP)
+                    elif tier == "casual":
+                        tier_channel = self.bot.get_channel(CASUAL)
+                    print(f"Sending message in {tier}")
+                    await tier_channel.send(f"||{player_user.mention}||", embed=embed)
+
+            elif member_info[str(player)]["reminder"]["type"] == "Remove":
+                embed.title = "Removed for inactivity"
+                embed.description = (
+                    f"{player_user.mention} - you have been removed from the queue"
+                )
+                embed.color = 0xFF0000
+                for tier in ping_notices[player]:
+                    # This (+ other things) could be made better by storing queue channel IDs in a dictionary rather than separate variables
+                    # I.e channels["elite"] would return ELITE
+                    if tier == "elite":
+                        tier_channel = self.bot.get_channel(ELITE)
+                        await tier_channel.send(
+                            f"||{player_user.mention}||", embed=embed
+                        )
+                        await self.remove_from_queue(
+                            None, player_user, "elite", ELITE, True
+                        )
+                    elif tier == "premier":
+                        tier_channel = self.bot.get_channel(PREMIER)
+                        await tier_channel.send(
+                            f"||{player_user.mention}||", embed=embed
+                        )
+                        await self.remove_from_queue(
+                            None, player_user, "premier", PREMIER, True
+                        )
+                    elif tier == "championship":
+                        tier_channel = self.bot.get_channel(CHAMPIONSHIP)
+                        await tier_channel.send(
+                            f"||{player_user.mention}||", embed=embed
+                        )
+                        await self.remove_from_queue(
+                            None, player_user, "championship", CHAMPIONSHIP, True
+                        )
+                    elif tier == "casual":
+                        tier_channel = self.bot.get_channel(CASUAL)
+                        await tier_channel.send(
+                            f"||{player_user.mention}||", embed=embed
+                        )
+                        await self.remove_from_queue(
+                            None, player_user, "casual", CASUAL, True
+                        )
+
+    async def send_removal_notices(self, removal_notices):
+        for player in removal_notices:
+            print(f"Sending Removal notice for {player} in {removal_notices[player]}")
+            player_user = self.bot.get_user(player)
+            embed = discord.Embed(
+                title="Removed for inactivity",
+                description=f"{player_user.mention} - you have been removed from the queue",
+                color=0xFF0000,
+            )
+            embed.set_footer(
+                text="Rejoin the queue if you still wish to play",
+                icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+            )
+
+            for tier in removal_notices[player]:
+                # This (+ other things) could be made better by storing queue channel IDs in a dictionary rather than separate variables
+                # I.e channels["elite"] would return ELITE
+                if tier == "elite":
+                    tier_channel = self.bot.get_channel(ELITE)
+                    await tier_channel.send(f"||{player_user.mention}||", embed=embed)
+                    await self.remove_from_queue(
+                        None, player_user, "elite", ELITE, True
+                    )
+                elif tier == "premier":
+                    tier_channel = self.bot.get_channel(PREMIER)
+                    await tier_channel.send(f"||{player_user.mention}||", embed=embed)
+                    await self.remove_from_queue(
+                        None, player_user, "premier", PREMIER, True
+                    )
+                elif tier == "championship":
+                    tier_channel = self.bot.get_channel(CHAMPIONSHIP)
+                    await tier_channel.send(f"||{player_user.mention}||", embed=embed)
+                    await self.remove_from_queue(
+                        None, player_user, "championship", CHAMPIONSHIP, True
+                    )
+                elif tier == "casual":
+                    tier_channel = self.bot.get_channel(CASUAL)
+                    await tier_channel.send(f"||{player_user.mention}||", embed=embed)
+                    await self.remove_from_queue(
+                        None, player_user, "casual", CASUAL, True
+                    )
 
     @queue_reminder.before_loop
     async def before_queue_reminder(self):
