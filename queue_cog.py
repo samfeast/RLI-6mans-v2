@@ -85,7 +85,6 @@ class queue_handler(commands.Cog):
 
     @tasks.loop(minutes=2)
     async def queue_reminder(self):
-        print("Executing task loop")
         with open("json/member_info.json", "r") as read_file:
             member_info = json.load(read_file)
 
@@ -116,14 +115,41 @@ class queue_handler(commands.Cog):
                                 else:
                                     ping_notices[player] = [tier]
 
-        await self.send_dm_notices(member_info, dm_notices)
-        await self.send_ping_notices(member_info, ping_notices)
-        await self.send_removal_notices(removal_notices)
+        if len(dm_notices) + len(ping_notices) + len(removal_notices) == 0:
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Queue",
+                    f"Reminder task loop completed with no notices required",
+                ]
+            )
+        else:
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Queue",
+                    f"Reminder task loop run with {len(dm_notices)} DM notices, {len(ping_notices)} ping notices, and {len(removal_notices)} removal notices required",
+                ]
+            )
+            await self.send_dm_notices(member_info, dm_notices)
+            await self.send_ping_notices(member_info, ping_notices)
+            await self.send_removal_notices(removal_notices)
 
     async def send_dm_notices(self, member_info, dm_notices):
         for player in dm_notices:
-            print(f"Sending DM notice for {player} in {dm_notices[player]}")
             player_user = self.bot.get_user(player)
+
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Queue",
+                    f"Processing DM notice for {player_user.name} [{player}] (Type: {member_info[str(player)]['reminder']['type']})",
+                ]
+            )
+
             embed = discord.Embed()
             embed.set_footer(
                 text="Change behaviour with /reminder",
@@ -163,14 +189,29 @@ class queue_handler(commands.Cog):
 
             try:
                 await player_user.send(embed=embed)
-                print(f"DM Sent successfully for {player}")
             except Exception as e:
-                print(f"Failed to DM {player}: {e}")
+                log_event(
+                    [
+                        round(time.time(), 2),
+                        time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                        "Queue",
+                        f"Failed to DM {player_user.name} [{player}]: {e}",
+                    ]
+                )
 
     async def send_ping_notices(self, member_info, ping_notices):
         for player in ping_notices:
-            print(f"Sending Ping notice for {player} in {ping_notices[player]}")
             player_user = self.bot.get_user(player)
+
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Queue",
+                    f"Processing ping notice for {player_user.name} [{player}] (Type: {member_info[str(player)]['reminder']['type']})",
+                ]
+            )
+
             embed = discord.Embed()
             embed.set_footer(
                 text="Change behaviour with /reminder",
@@ -192,7 +233,6 @@ class queue_handler(commands.Cog):
                         tier_channel = self.bot.get_channel(CHAMPIONSHIP)
                     elif tier == "casual":
                         tier_channel = self.bot.get_channel(CASUAL)
-                    print(f"Sending message in {tier}")
                     await tier_channel.send(f"||{player_user.mention}||", embed=embed)
 
             elif member_info[str(player)]["reminder"]["type"] == "Remove":
@@ -239,8 +279,17 @@ class queue_handler(commands.Cog):
 
     async def send_removal_notices(self, removal_notices):
         for player in removal_notices:
-            print(f"Sending Removal notice for {player} in {removal_notices[player]}")
             player_user = self.bot.get_user(player)
+
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Queue",
+                    f"Processing removal notice for {player_user.name} [{player}] (Type: Forced Removal)",
+                ]
+            )
+
             embed = discord.Embed(
                 title="Removed for inactivity",
                 description=f"{player_user.mention} - you have been removed from the queue",
@@ -281,7 +330,14 @@ class queue_handler(commands.Cog):
 
     @queue_reminder.before_loop
     async def before_queue_reminder(self):
-        print("Waiting for bot startup to initiate loop")
+        log_event(
+            [
+                round(time.time(), 2),
+                time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                "Queue",
+                f"Reminder task loop waiting for bot startup",
+            ]
+        )
         await self.bot.wait_until_ready()
 
     # Join queue
