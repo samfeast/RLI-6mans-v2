@@ -31,14 +31,14 @@ TEAM_PICKER_COLOURS = {"random": 0xDA373C, "captains": 0x5865F2, "balanced": 0x2
 # 5/6 players queued for ease of testing
 queue = {
     "elite": {
-        935182920019234887: 1690139222,
-        1104162909120110603: 2,
+        797201172792344616: 1690510497,
+        1104162909120110603: 1690510497,
         865798504714338324: 3,
         988906946725822484: 4,
         963466636059365476: 5,
     },
     "premier": {
-        935182920019234887: 1690139222,
+        797201172792344616: 1690510497,
         1104162909120110603: 2,
         865798504714338324: 3,
         988906946725822484: 4,
@@ -83,63 +83,95 @@ class queue_handler(commands.Cog):
         )
         await interaction.response.send_message("Pong!", ephemeral=True)
 
-    @tasks.loop(seconds=5.0)
+    @tasks.loop(minutes=2)
     async def queue_reminder(self):
+        print("Executing task loop")
         with open("json/member_info.json", "r") as read_file:
             member_info = json.load(read_file)
 
-        custom_reminders = {}
-        force_removals = {}
+        dm_notices = {}
+        ping_notices = {}
 
         for tier in list(queue.keys()):
             for player in queue[tier]:
                 time_delta = time.time() - queue[tier][player]
                 if time_delta > 14400:
-                    if player in force_removals:
-                        force_removals[player].append(tier)
+                    if player in ping_notices:
+                        ping_notices[player].append(tier)
                     else:
-                        force_removals[player] = [tier]
+                        ping_notices[player] = [tier]
                 else:
                     if str(player) in member_info:
-                        if member_info[str(player)]["reminder"] != None:
-                            if (
-                                time_delta
-                                > member_info[str(player)]["reminder"]["interval"]
-                            ):
-                                if player in custom_reminders:
-                                    custom_reminders[player].append(tier)
+                        player_reminder_settings = member_info[str(player)]["reminder"]
+                        if time_delta > player_reminder_settings["interval"]:
+                            if player_reminder_settings["message_type"] == "DM":
+                                if player in dm_notices:
+                                    dm_notices[player].append(tier)
                                 else:
-                                    custom_reminders[player] = [tier]
+                                    dm_notices[player] = [tier]
+                            elif player_reminder_settings["message_type"] == "Ping":
+                                if player in dm_notices:
+                                    ping_notices[player].append(tier)
+                                else:
+                                    ping_notices[player] = [tier]
 
-        await self.force_remove(force_removals)
-        await self.custom_remove(custom_reminders)
+        await self.send_dm_notices(member_info, dm_notices)
+        await self.send_ping_notices(member_info, ping_notices)
 
-    async def force_remove(self, players):
-        for player in players:
-            for tier in players[player]:
-                if tier == "elite":
-                    tier_channel = self.bot.get_channel(ELITE)
-                    try:
-                        player_user = self.bot.get_user(player)
-                        embed = discord.Embed(
-                            title="Removed for inactivity",
-                            description=f"{player_user.name} has been removed from the queue due to inactivity",
-                            color=0xFF0000,
+    async def send_dm_notices(self, member_info, dm_notices):
+        for player in dm_notices:
+            print(f"Sending DM notice for {player}")
+            player_user = self.bot.get_user(player)
+            embed = discord.Embed()
+            embed.set_footer(
+                text="Change behaviour with /reminder",
+                icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+            )
+            if member_info[str(player)]["reminder"]["type"] == "Reminder":
+                embed.title = "Reminder!"
+                embed.description = (
+                    f"You are still in the {' and '.join(dm_notices[player])} queue"
+                )
+                embed.color = 0xFF8B00
+                for tier in dm_notices[player]:
+                    queue[tier][player] = round(time.time())
+            elif member_info[str(player)]["reminder"]["type"] == "Remove":
+                embed.title = "Removed for inactivity"
+                embed.description = f"You have been removed from the {' and '.join(dm_notices[player])} queue"
+                embed.color = 0xFF0000
+                for tier in dm_notices[player]:
+                    # This (+ other things) could be made better by storing queue channel IDs in a dictionary rather than separate variables
+                    # I.e channels["elite"] would return ELITE
+                    if tier == "elite":
+                        await self.remove_from_queue(
+                            None, player_user, "elite", ELITE, True
                         )
-                        embed.set_footer(
-                            text="Rejoin the queue if you still wish to play",
-                            icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+                    elif tier == "premier":
+                        await self.remove_from_queue(
+                            None, player_user, "premier", PREMIER, True
                         )
-                        await tier_channel.send(
-                            f"||{player_user.mention}||", embed=embed
+                    elif tier == "championship":
+                        await self.remove_from_queue(
+                            None, player_user, "championship", CHAMPIONSHIP, True
                         )
-                        del queue[tier][player]
-                    except AttributeError:
-                        print("Exception")
-                        pass
+                    elif tier == "casual":
+                        await self.remove_from_queue(
+                            None, player_user, "casual", CASUAL, True
+                        )
 
-    async def custom_remove(self, players):
+            try:
+                await player_user.send(embed=embed)
+                print(f"DM Sent successfully for {player}")
+            except Exception as e:
+                print(f"Failed to DM {player}: {e}")
+
+    async def send_ping_notices(self, member_info, dm_notices):
         pass
+
+    @queue_reminder.before_loop
+    async def before_queue_reminder(self):
+        print("Waiting for bot startup to initiate loop")
+        await self.bot.wait_until_ready()
 
     # Join queue
     @app_commands.command(description="Join the queue.")
@@ -567,7 +599,9 @@ class queue_handler(commands.Cog):
                     description=f"{user.mention} has been removed from the <#{queue_channel_id}> queue",
                     color=0xFF0000,
                 )
-                await interaction.response.send_message(embed=embed)
+                # When the task loop removes a user from the queue there is no interaction, so no response can/needs to be sent
+                if interaction != None:
+                    await interaction.response.send_message(embed=embed)
 
                 if len(queue[tier]) == 1:
                     embed = discord.Embed(title="1 player is in the queue!")
@@ -614,7 +648,8 @@ class queue_handler(commands.Cog):
                 ]
             )
             if removed:
-                await interaction.response.send_message("User is not in the queue.")
+                if interaction != None:
+                    await interaction.response.send_message("User is not in the queue.")
             else:
                 await interaction.response.send_message(
                     "You are not in the queue.", ephemeral=True
