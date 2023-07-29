@@ -237,14 +237,21 @@ class reporting(commands.Cog):
     async def reverse_report(
         self, interaction: discord.Interaction, game_id: str, date: str
     ):
+        log_event(
+            [
+                round(time.time(), 2),
+                time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                "Reporting",
+                f"'reverse_report' used by {interaction.user.name} [{interaction.user.id}] for {game_id.upper()} on {date}",
+            ]
+        )
+
         with open("json/game_log.json", "r") as read_file:
             game_log = json.load(read_file)
 
         full_game_id = game_id + "-" + date.replace(".", "")
 
         if full_game_id in game_log["complete"]:
-            print(f"{full_game_id} exists")
-
             game_dict = game_log["complete"][full_game_id]
 
             winning_players = game_dict[game_dict["winner"]]
@@ -278,11 +285,28 @@ class reporting(commands.Cog):
                 icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
             )
 
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Reporting",
+                    f"{full_game_id} is valid - launching confirmation view",
+                ]
+            )
+
             await interaction.response.send_message(
                 embed=embed,
                 view=Verify_Reversal(self.bot, full_game_id, interaction.user.id),
             )
         else:
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Reporting",
+                    f"{full_game_id} does not exist",
+                ]
+            )
             await interaction.response.send_message(
                 f"No series with ID {game_id} could be found on {date}"
             )
@@ -302,6 +326,14 @@ class Verify_Reversal(discord.ui.View):
         await interaction.response.defer()
         message = await interaction.original_response()
         if interaction.user.id == self.user:
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Reporting",
+                    f"Reversing {self.game_id}",
+                ]
+            )
             await interaction.followup.send(
                 f"{self.game_id.split('-')[0]} has been reversed. It can now be reported by players on the winning team."
             )
@@ -333,6 +365,7 @@ class Verify_Reversal(discord.ui.View):
             game_dict["winner"] = None
             game_dict["loser"] = None
             game_dict["elo_swing"] = None
+            game_dict["timeout_immunity"] = True
 
             game_log["live"][self.game_id] = game_dict
             del game_log["complete"][self.game_id]
@@ -353,6 +386,14 @@ class Verify_Reversal(discord.ui.View):
         await interaction.response.defer()
         message = await interaction.original_response()
         if interaction.user.id == self.user:
+            log_event(
+                [
+                    round(time.time(), 2),
+                    time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
+                    "Reporting",
+                    f"Cancelling reversal for {self.game_id}",
+                ]
+            )
             await interaction.followup.send(f"Cancelled. The series was not reversed.")
             await interaction.followup.edit_message(message_id=message.id, view=None)
         else:

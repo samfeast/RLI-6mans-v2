@@ -100,7 +100,10 @@ class queue_handler(commands.Cog):
             game_log = json.load(read_file)
 
         for game in game_log["live"]:
-            if current_unix - game_log["live"][game]["created"] > 28800:
+            if (
+                current_unix - game_log["live"][game]["created"] > 28800
+                and game_log["live"][game]["timeout_immunity"] == False
+            ):
                 live_games_to_remove.append(game)
 
         for queue in active_queues_to_remove:
@@ -1112,6 +1115,7 @@ class Team_Picker(discord.ui.View):
             "p1_win": p1_win,
             "p2_win": p2_win,
             "elo_swing": None,
+            "timeout_immunity": False,
         }
 
         with open("json/game_log.json", "w") as write_file:
