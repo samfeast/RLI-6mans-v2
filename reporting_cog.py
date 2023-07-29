@@ -369,6 +369,7 @@ class Verify_Reversal(discord.ui.View):
 
             game_log["live"][self.game_id] = game_dict
             del game_log["complete"][self.game_id]
+            game_log["stats_queue"].remove(self.game_id)
 
             with open("json/game_log.json", "w") as write_file:
                 json.dump(game_log, write_file, indent=2)
