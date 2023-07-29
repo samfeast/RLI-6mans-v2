@@ -232,6 +232,134 @@ class reporting(commands.Cog):
             )
             await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(description="Un-report a series.")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def reverse_report(
+        self, interaction: discord.Interaction, game_id: str, date: str
+    ):
+        with open("json/game_log.json", "r") as read_file:
+            game_log = json.load(read_file)
+
+        full_game_id = game_id + "-" + date.replace(".", "")
+
+        if full_game_id in game_log["complete"]:
+            print(f"{full_game_id} exists")
+
+            game_dict = game_log["complete"][full_game_id]
+
+            winning_players = game_dict[game_dict["winner"]]
+            losing_players = game_dict[game_dict["loser"]]
+
+            mention_winning_players = []
+            for player in winning_players:
+                mention_winning_players.append(self.bot.get_user(player).name)
+
+            mention_losing_players = []
+            for player in losing_players:
+                mention_losing_players.append(self.bot.get_user(player).name)
+
+            embed = discord.Embed(
+                title=f"{game_dict['tier'].capitalize()} Game: {game_id.split('-')[0]} ({date})",
+                description="**Are you sure you wish to reverse this series result?**",
+                color=0xFF8B00,
+            )
+            embed.add_field(
+                name=f"Winning Team",
+                value=", ".join(player for player in mention_winning_players),
+                inline=False,
+            )
+            embed.add_field(
+                name=f"Losing Team",
+                value=", ".join(player for player in mention_losing_players),
+                inline=False,
+            )
+            embed.set_footer(
+                text=f"Powered by RLI, for RLI",
+                icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
+            )
+
+            await interaction.response.send_message(
+                embed=embed,
+                view=Verify_Reversal(self.bot, full_game_id, interaction.user.id),
+            )
+        else:
+            await interaction.response.send_message(
+                f"No series with ID {game_id} could be found on {date}"
+            )
+
+
+class Verify_Reversal(discord.ui.View):
+    def __init__(self, bot, game_id: str, user: int):
+        super().__init__(timeout=300)
+        self.game_id = game_id
+        self.bot = bot
+        self.user = user
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green)
+    async def confirm(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        await interaction.response.defer()
+        message = await interaction.original_response()
+        if interaction.user.id == self.user:
+            await interaction.followup.send(
+                f"{self.game_id.split('-')[0]} has been reversed. It can now be reported by players on the winning team."
+            )
+            await interaction.followup.edit_message(message_id=message.id, view=None)
+
+            with open("json/game_log.json", "r") as read_file:
+                game_log = json.load(read_file)
+
+            with open("json/player_data.json", "r") as read_file:
+                player_data = json.load(read_file)
+
+            game_dict = game_log["complete"][self.game_id]
+
+            for player in game_dict[game_dict["winner"]]:
+                player_data[game_dict["tier"]][str(player)]["wins"] -= 1
+                player_data[game_dict["tier"]][str(player)]["points"] -= POINTS_FOR_WIN
+                player_data[game_dict["tier"]][str(player)]["elo"] -= game_dict[
+                    "elo_swing"
+                ]
+
+            for player in game_dict[game_dict["loser"]]:
+                player_data[game_dict["tier"]][str(player)]["losses"] -= 1
+                player_data[game_dict["tier"]][str(player)]["points"] += POINTS_FOR_LOSS
+                player_data[game_dict["tier"]][str(player)]["elo"] += game_dict[
+                    "elo_swing"
+                ]
+
+            game_dict["reported"] = None
+            game_dict["winner"] = None
+            game_dict["loser"] = None
+            game_dict["elo_swing"] = None
+
+            game_log["live"][self.game_id] = game_dict
+            del game_log["complete"][self.game_id]
+
+            with open("json/game_log.json", "w") as write_file:
+                json.dump(game_log, write_file, indent=2)
+
+            with open("json/player_data.json", "w") as write_file:
+                json.dump(player_data, write_file, indent=2)
+
+        else:
+            await interaction.followup.send(
+                "You do not have permission to respond to this", ephemeral=True
+            )
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        message = await interaction.original_response()
+        if interaction.user.id == self.user:
+            await interaction.followup.send(f"Cancelled. The series was not reversed.")
+            await interaction.followup.edit_message(message_id=message.id, view=None)
+        else:
+            await interaction.followup.send(
+                "You do not have permission to respond to this", ephemeral=True
+            )
+
 
 async def setup(bot):
     await bot.add_cog(reporting(bot))
