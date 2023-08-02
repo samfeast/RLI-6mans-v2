@@ -1,3 +1,9 @@
+# TODO: Migrate to a sqlite database using either asqlite or aiosqlite
+# This would replace all json records which are prone to data loss
+# Look into connection pooling
+# TODO: Come up with a naming system for variables and everything
+# Standardise the meaning of everything to make code more readable
+
 from asyncore import write
 import discord
 from discord.ext import commands, tasks
