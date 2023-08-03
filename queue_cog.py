@@ -3,6 +3,8 @@
 # Look into connection pooling
 # TODO: Come up with a naming system for variables and everything
 # Standardise the meaning of everything to make code more readable
+# TODO: Just import the config dictionary rather than using loads of different variables
+# Also include things like timeout constants in config for more customisation
 
 from asyncore import write
 import discord
@@ -21,15 +23,16 @@ with open("json/config.json", "r") as read_file:
 
 GUILD_ID = config["GUILD_ID"]
 
-ELITE = config["CHANNELS"]["ELITE"]
-PREMIER = config["CHANNELS"]["PREMIER"]
-CHAMPIONSHIP = config["CHANNELS"]["CHAMPIONSHIP"]
-CASUAL = config["CHANNELS"]["CASUAL"]
-
-ELITE_LOGS = config["CHANNELS"]["ELITE_LOGS"]
-PREMIER_LOGS = config["CHANNELS"]["PREMIER_LOGS"]
-CHAMPIONSHIP_LOGS = config["CHANNELS"]["CHAMPIONSHIP_LOGS"]
-CASUAL_LOGS = config["CHANNELS"]["CASUAL_LOGS"]
+CHANNELS = {
+    "elite": config["CHANNELS"]["ELITE"],
+    "premier": config["CHANNELS"]["PREMIER"],
+    "championship": config["CHANNELS"]["CHAMPIONSHIP"],
+    "casual": config["CHANNELS"]["CASUAL"],
+    "elite_logs": config["CHANNELS"]["ELITE_LOGS"],
+    "premier_logs": config["CHANNELS"]["PREMIER_LOGS"],
+    "championship_logs": config["CHANNELS"]["CHAMPIONSHIP_LOGS"],
+    "casual_logs": config["CHANNELS"]["CASUAL_LOGS"],
+}
 
 ELO_SENSITIVITY = config["ELO_SENSITIVITY"]
 TEAM_PICKER_COLOURS = {"random": 0xDA373C, "captains": 0x5865F2, "balanced": 0x248046}
@@ -87,13 +90,13 @@ class queue_handler(commands.Cog):
     # Removes active queues and unreported games after 1 hour and 8 hours respectively
     @tasks.loop(minutes=2)
     async def cleaner(self):
-        current_unix = round(time.time())
+        timestamp = round(time.time())
 
         active_queues_to_remove = []
         live_games_to_remove = []
 
         for active_queue in active_queues:
-            if current_unix - active_queues[active_queue]["timestamp"] > 3600:
+            if timestamp - active_queues[active_queue]["timestamp"] > 3600:
                 active_queues_to_remove.append(active_queue)
 
         with open("json/game_log.json", "r") as read_file:
@@ -101,7 +104,7 @@ class queue_handler(commands.Cog):
 
         for game in game_log["live"]:
             if (
-                current_unix - game_log["live"][game]["created"] > 28800
+                timestamp - game_log["live"][game]["created"] > 28800
                 and game_log["live"][game]["timeout_immunity"] == False
             ):
                 live_games_to_remove.append(game)
@@ -112,7 +115,7 @@ class queue_handler(commands.Cog):
                     round(time.time(), 2),
                     time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                     "Queue",
-                    f"Deleting {queue} from active queues (1+ hours since creation)",
+                    f"Deleting {queue} from active queues (>1 hour since creation)",
                 ]
             )
             del active_queues[queue]
@@ -122,7 +125,7 @@ class queue_handler(commands.Cog):
                     round(time.time(), 2),
                     time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                     "Queue",
-                    f"Deleting {game} from live game log (8+ hours since creation)",
+                    f"Deleting {game} from live game log (>8 hours since creation)",
                 ]
             )
             del game_log["live"][game]
@@ -223,24 +226,9 @@ class queue_handler(commands.Cog):
                 embed.description = f"You have been removed from the {' and '.join(dm_notices[player])} queue"
                 embed.color = 0xFF0000
                 for tier in dm_notices[player]:
-                    # This (+ other things) could be made better by storing queue channel IDs in a dictionary rather than separate variables
-                    # I.e channels["elite"] would return ELITE
-                    if tier == "elite":
-                        await self.remove_from_queue(
-                            None, player_user, "elite", ELITE, True
-                        )
-                    elif tier == "premier":
-                        await self.remove_from_queue(
-                            None, player_user, "premier", PREMIER, True
-                        )
-                    elif tier == "championship":
-                        await self.remove_from_queue(
-                            None, player_user, "championship", CHAMPIONSHIP, True
-                        )
-                    elif tier == "casual":
-                        await self.remove_from_queue(
-                            None, player_user, "casual", CASUAL, True
-                        )
+                    await self.remove_from_queue(
+                        None, player_user, tier, CHANNELS[tier], True
+                    )
 
             try:
                 await player_user.send(embed=embed)
@@ -280,14 +268,7 @@ class queue_handler(commands.Cog):
                 embed.color = 0x0062FF
                 for tier in ping_notices[player]:
                     queue[tier][player] = round(time.time())
-                    if tier == "elite":
-                        tier_channel = self.bot.get_channel(ELITE)
-                    elif tier == "premier":
-                        tier_channel = self.bot.get_channel(PREMIER)
-                    elif tier == "championship":
-                        tier_channel = self.bot.get_channel(CHAMPIONSHIP)
-                    elif tier == "casual":
-                        tier_channel = self.bot.get_channel(CASUAL)
+                    tier_channel = self.bot.get_channel(CHANNELS[tier])
                     await tier_channel.send(f"||{player_user.mention}||", embed=embed)
 
             elif member_info[str(player)]["reminder"]["type"] == "Remove":
@@ -297,40 +278,11 @@ class queue_handler(commands.Cog):
                 )
                 embed.color = 0xFF0000
                 for tier in ping_notices[player]:
-                    # This (+ other things) could be made better by storing queue channel IDs in a dictionary rather than separate variables
-                    # I.e channels["elite"] would return ELITE
-                    if tier == "elite":
-                        tier_channel = self.bot.get_channel(ELITE)
-                        await tier_channel.send(
-                            f"||{player_user.mention}||", embed=embed
-                        )
-                        await self.remove_from_queue(
-                            None, player_user, "elite", ELITE, True
-                        )
-                    elif tier == "premier":
-                        tier_channel = self.bot.get_channel(PREMIER)
-                        await tier_channel.send(
-                            f"||{player_user.mention}||", embed=embed
-                        )
-                        await self.remove_from_queue(
-                            None, player_user, "premier", PREMIER, True
-                        )
-                    elif tier == "championship":
-                        tier_channel = self.bot.get_channel(CHAMPIONSHIP)
-                        await tier_channel.send(
-                            f"||{player_user.mention}||", embed=embed
-                        )
-                        await self.remove_from_queue(
-                            None, player_user, "championship", CHAMPIONSHIP, True
-                        )
-                    elif tier == "casual":
-                        tier_channel = self.bot.get_channel(CASUAL)
-                        await tier_channel.send(
-                            f"||{player_user.mention}||", embed=embed
-                        )
-                        await self.remove_from_queue(
-                            None, player_user, "casual", CASUAL, True
-                        )
+                    tier_channel = self.bot.get_channel(CHANNELS[tier])
+                    await tier_channel.send(f"||{player_user.mention}||", embed=embed)
+                    await self.remove_from_queue(
+                        None, player_user, tier, CHANNELS[tier], True
+                    )
 
     async def send_removal_notices(self, removal_notices):
         for player in removal_notices:
@@ -356,32 +308,11 @@ class queue_handler(commands.Cog):
             )
 
             for tier in removal_notices[player]:
-                # This (+ other things) could be made better by storing queue channel IDs in a dictionary rather than separate variables
-                # I.e channels["elite"] would return ELITE
-                if tier == "elite":
-                    tier_channel = self.bot.get_channel(ELITE)
-                    await tier_channel.send(f"||{player_user.mention}||", embed=embed)
-                    await self.remove_from_queue(
-                        None, player_user, "elite", ELITE, True
-                    )
-                elif tier == "premier":
-                    tier_channel = self.bot.get_channel(PREMIER)
-                    await tier_channel.send(f"||{player_user.mention}||", embed=embed)
-                    await self.remove_from_queue(
-                        None, player_user, "premier", PREMIER, True
-                    )
-                elif tier == "championship":
-                    tier_channel = self.bot.get_channel(CHAMPIONSHIP)
-                    await tier_channel.send(f"||{player_user.mention}||", embed=embed)
-                    await self.remove_from_queue(
-                        None, player_user, "championship", CHAMPIONSHIP, True
-                    )
-                elif tier == "casual":
-                    tier_channel = self.bot.get_channel(CASUAL)
-                    await tier_channel.send(f"||{player_user.mention}||", embed=embed)
-                    await self.remove_from_queue(
-                        None, player_user, "casual", CASUAL, True
-                    )
+                tier_channel = self.bot.get_channel(CHANNELS[tier])
+                await tier_channel.send(f"||{player_user.mention}||", embed=embed)
+                await self.remove_from_queue(
+                    None, player_user, tier, CHANNELS[tier], True
+                )
 
     @queue_reminder.before_loop
     async def before_queue_reminder(self):
@@ -408,62 +339,29 @@ class queue_handler(commands.Cog):
             ]
         )
 
-        if interaction.channel.id == ELITE:
-            if interaction.user.id in queue["elite"]:
-                await interaction.response.send_message(
-                    "You are already in the queue.", ephemeral=True
-                )
-            else:
-                await self.add_to_queue(
-                    interaction,
-                    interaction.user,
-                    "elite",
-                    ELITE,
-                    False,
-                )
-        elif interaction.channel.id == PREMIER:
-            if interaction.user.id in queue["premier"]:
-                await interaction.response.send_message(
-                    "You are already in the queue.", ephemeral=True
-                )
-            else:
-                await self.add_to_queue(
-                    interaction,
-                    interaction.user,
-                    "premier",
-                    PREMIER,
-                    False,
-                )
-        elif interaction.channel.id == CHAMPIONSHIP:
-            if interaction.user.id in queue["championship"]:
-                await interaction.response.send_message(
-                    "You are already in the queue.", ephemeral=True
-                )
-            else:
-                await self.add_to_queue(
-                    interaction,
-                    interaction.user,
-                    "championship",
-                    CHAMPIONSHIP,
-                    False,
-                )
-        elif interaction.channel.id == CASUAL:
-            if interaction.user.id in queue["casual"]:
-                await interaction.response.send_message(
-                    "You are already in the queue.", ephemeral=True
-                )
-            else:
-                await self.add_to_queue(
-                    interaction,
-                    interaction.user,
-                    "casual",
-                    CASUAL,
-                    False,
-                )
+        tier = None
+        if interaction.channel.id == CHANNELS["elite"]:
+            tier = "elite"
+        elif interaction.channel.id == CHANNELS["premier"]:
+            tier = "premier"
+        elif interaction.channel.id == CHANNELS["championship"]:
+            tier = "championship"
+        elif interaction.channel.id == CHANNELS["casual"]:
+            tier = "casual"
         else:
             await interaction.response.send_message(
                 "Queuing is not enabled in this channel.", ephemeral=True
             )
+
+        if tier:
+            if interaction.user.id in queue[tier]:
+                await interaction.response.send_message(
+                    "You are already in the queue.", ephemeral=True
+                )
+            else:
+                await self.add_to_queue(
+                    interaction, interaction.user, tier, CHANNELS[tier], False
+                )
 
     @app_commands.command(description="Add a user to the queue.")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
@@ -477,63 +375,28 @@ class queue_handler(commands.Cog):
             ]
         )
 
-        if interaction.channel.id == ELITE_LOGS:
-            if user.id in queue["elite"]:
-                await interaction.response.send_message(
-                    "User is already in the queue.", ephemeral=True
-                )
-            else:
-                await self.add_to_queue(
-                    interaction,
-                    user,
-                    "elite",
-                    ELITE,
-                    True,
-                )
-        elif interaction.channel.id == PREMIER_LOGS:
-            if user.id in queue["premier"]:
-                await interaction.response.send_message(
-                    "User is already in the queue.", ephemeral=True
-                )
-            else:
-                await self.add_to_queue(
-                    interaction,
-                    user,
-                    "premier",
-                    PREMIER,
-                    True,
-                )
-        elif interaction.channel.id == CHAMPIONSHIP_LOGS:
-            if user.id in queue["championship"]:
-                await interaction.response.send_message(
-                    "User is already in the queue.", ephemeral=True
-                )
-            else:
-                await self.add_to_queue(
-                    interaction,
-                    user,
-                    "championship",
-                    CHAMPIONSHIP,
-                    True,
-                )
-        elif interaction.channel.id == CASUAL_LOGS:
-            if user.id in queue["casual"]:
-                await interaction.response.send_message(
-                    "User is already in the queue.", ephemeral=True
-                )
-            else:
-                await self.add_to_queue(
-                    interaction,
-                    user,
-                    "casual",
-                    CASUAL,
-                    True,
-                )
+        tier = None
+        if interaction.channel.id == CHANNELS["elite_logs"]:
+            tier = "elite"
+        elif interaction.channel.id == CHANNELS["premier_logs"]:
+            tier = "premier"
+        elif interaction.channel.id == CHANNELS["championship_logs"]:
+            tier = "championship"
+        elif interaction.channel.id == CHANNELS["casual_logs"]:
+            tier = "casual"
         else:
             await interaction.response.send_message(
                 "This command must be used in the corresponding logs channel.",
                 ephemeral=True,
             )
+
+        if tier:
+            if user.id in queue[tier]:
+                await interaction.response.send_message(
+                    "User is already in the queue.", ephemeral=True
+                )
+            else:
+                await self.add_to_queue(interaction, user, tier, CHANNELS[tier], True)
 
     async def add_to_queue(self, interaction, user, tier, queue_channel_id, added):
         queue_channel = self.bot.get_channel(queue_channel_id)
@@ -665,25 +528,26 @@ class queue_handler(commands.Cog):
                     ]
                 )
 
+                # Could this be refactored to be nicer than this?
                 mention_players = []
                 for player in active_queues[game_id]["players"]:
                     player_user = self.bot.get_user(player)
                     mention_players.append(player_user.mention)
                     if player in queue["elite"] and tier != "elite":
                         await self.remove_from_queue(
-                            None, player_user, "elite", ELITE, True
+                            None, player_user, "elite", CHANNELS["elite"], True
                         )
                     if player in queue["premier"] and tier != "premier":
                         await self.remove_from_queue(
-                            None, player_user, "premier", PREMIER, True
+                            None, player_user, "premier", CHANNELS["premier"], True
                         )
                     if player in queue["championship"] and tier != "championship":
                         await self.remove_from_queue(
-                            None, player_user, "championship", CHAMPIONSHIP, True
+                            None, player_user, "championship", CHANNELS["championship"], True
                         )
                     if player in queue["casual"] and tier != "casual":
                         await self.remove_from_queue(
-                            None, player_user, "casual", CASUAL, True
+                            None, player_user, "casual", CHANNELS["casual"], True
                         )
 
                 queue[tier] = {}
@@ -722,43 +586,22 @@ class queue_handler(commands.Cog):
                 f"'l' used by {interaction.user.name} [{interaction.user.id}] in {interaction.channel.name} [{interaction.channel.id}]",
             ]
         )
-
-        if interaction.channel_id == ELITE:
-            await self.remove_from_queue(
-                interaction,
-                interaction.user,
-                "elite",
-                ELITE,
-                False,
-            )
-        elif interaction.channel_id == PREMIER:
-            await self.remove_from_queue(
-                interaction,
-                interaction.user,
-                "premier",
-                PREMIER,
-                False,
-            )
-        elif interaction.channel_id == CHAMPIONSHIP:
-            await self.remove_from_queue(
-                interaction,
-                interaction.user,
-                "championship",
-                CHAMPIONSHIP,
-                False,
-            )
-        elif interaction.channel_id == CASUAL:
-            await self.remove_from_queue(
-                interaction,
-                interaction.user,
-                "casual",
-                CASUAL,
-                False,
-            )
+        tier = None
+        if interaction.channel_id == CHANNELS["elite"]:
+            tier = "elite"
+        elif interaction.channel_id == CHANNELS["premier"]:
+            tier = "premier"
+        elif interaction.channel_id == CHANNELS["championship"]:
+            tier = "championship"
+        elif interaction.channel_id == CHANNELS["casual"]:
+            tier = "casual"
         else:
             await interaction.response.send_message(
                 "Queuing is not enabled in this channel.", ephemeral=True
             )
+        
+        if tier:
+            await self.remove_from_queue(interaction, interaction.user, tier, CHANNELS[tier], False)
 
     # Leave command
     @app_commands.command(description="Remove a user from the queue.")
@@ -773,42 +616,22 @@ class queue_handler(commands.Cog):
             ]
         )
 
-        if interaction.channel_id == ELITE_LOGS:
-            await self.remove_from_queue(
-                interaction,
-                user,
-                "elite",
-                ELITE,
-                True,
-            )
-        elif interaction.channel_id == PREMIER_LOGS:
-            await self.remove_from_queue(
-                interaction,
-                user,
-                "premier",
-                PREMIER,
-                True,
-            )
-        elif interaction.channel_id == CHAMPIONSHIP_LOGS:
-            await self.remove_from_queue(
-                interaction,
-                user,
-                "championship",
-                CHAMPIONSHIP,
-                True,
-            )
-        elif interaction.channel_id == CASUAL_LOGS:
-            await self.remove_from_queue(
-                interaction,
-                user,
-                "casual",
-                CASUAL,
-                True,
-            )
+        tier = None
+        if interaction.channel_id == CHANNELS["elite_logs"]:
+            tier = "elite"
+        elif interaction.channel_id == CHANNELS["premier_logs"]:
+            tier = "premier"
+        elif interaction.channel_id == CHANNELS["championship_logs"]:
+            tier = "championship"
+        elif interaction.channel_id == CHANNELS["casual_logs"]:
+            tier = "casual"
         else:
             await interaction.response.send_message(
-                "Queuing is not enabled in this channel.", ephemeral=True
+                "This command must be used in the corresponding logs channel.", ephemeral=True
             )
+
+        if tier:
+            await self.remove_from_queue(interaction, user, tier, CHANNELS[tier], True)
 
     # Queue removal function
     async def remove_from_queue(
@@ -891,13 +714,13 @@ class queue_handler(commands.Cog):
     @app_commands.command(description="Check how many players are in the queue.")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def status(self, interaction: discord.Interaction):
-        if interaction.channel_id == ELITE:
+        if interaction.channel_id == CHANNELS["elite"]:
             await self.show_status(interaction, queue["elite"])
-        elif interaction.channel_id == PREMIER:
+        elif interaction.channel_id == CHANNELS["premier"]:
             await self.show_status(interaction, queue["premier"])
-        elif interaction.channel_id == CHAMPIONSHIP:
+        elif interaction.channel_id == CHANNELS["championship"]:
             await self.show_status(interaction, queue["championship"])
-        elif interaction.channel_id == CASUAL:
+        elif interaction.channel_id == CHANNELS["casual"]:
             await self.show_status(interaction, queue["casual"])
         else:
             await interaction.response.send_message(
