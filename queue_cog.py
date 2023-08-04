@@ -1,12 +1,3 @@
-# TODO: Migrate to a sqlite database using either asqlite or aiosqlite
-# This would replace all json records which are prone to data loss
-# Look into connection pooling
-# TODO: Come up with a naming system for variables and everything
-# Standardise the meaning of everything to make code more readable
-# TODO: Just import the config dictionary rather than using loads of different variables
-# Also include things like timeout constants in config for more customisation
-
-from asyncore import write
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
@@ -87,7 +78,7 @@ class queue_handler(commands.Cog):
         )
         await interaction.response.send_message("Pong!", ephemeral=True)
 
-    # Removes active queues and unreported games after 1 hour and 8 hours respectively
+    # Removes active queues and unreported games after 1 hour and 8 hours respectively (can be changed)
     @tasks.loop(minutes=2)
     async def cleaner(self):
         timestamp = round(time.time())
@@ -543,7 +534,11 @@ class queue_handler(commands.Cog):
                         )
                     if player in queue["championship"] and tier != "championship":
                         await self.remove_from_queue(
-                            None, player_user, "championship", CHANNELS["championship"], True
+                            None,
+                            player_user,
+                            "championship",
+                            CHANNELS["championship"],
+                            True,
                         )
                     if player in queue["casual"] and tier != "casual":
                         await self.remove_from_queue(
@@ -599,9 +594,11 @@ class queue_handler(commands.Cog):
             await interaction.response.send_message(
                 "Queuing is not enabled in this channel.", ephemeral=True
             )
-        
+
         if tier:
-            await self.remove_from_queue(interaction, interaction.user, tier, CHANNELS[tier], False)
+            await self.remove_from_queue(
+                interaction, interaction.user, tier, CHANNELS[tier], False
+            )
 
     # Leave command
     @app_commands.command(description="Remove a user from the queue.")
@@ -627,7 +624,8 @@ class queue_handler(commands.Cog):
             tier = "casual"
         else:
             await interaction.response.send_message(
-                "This command must be used in the corresponding logs channel.", ephemeral=True
+                "This command must be used in the corresponding logs channel.",
+                ephemeral=True,
             )
 
         if tier:
