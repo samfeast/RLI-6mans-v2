@@ -11,15 +11,35 @@ discord.utils.setup_logging()
 with open("json/config.json", "r") as read_file:
     config = json.load(read_file)
 
-PREFIX = ">"
 TOKEN = config["TOKEN"]
 GUILD_ID = config["GUILD_ID"]
+PREFIX = config["PREFIX"]
 
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 
-bot = commands.Bot(command_prefix=PREFIX, intents=intents)
+
+class RLI_6Mans(commands.Bot):
+    def __init__(
+        self,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+    async def setup_hook(self) -> None:
+        cogs = [f[:-3] for f in listdir() if "cog" == f[-6:-3]]
+        print("Cogs:")
+        for cog in cogs:
+            try:
+                await self.load_extension(cog)
+                print(f"\t{cog}")
+            except Exception as e:
+                print(f"Failed to load {cog}")
+                print(f"{type(e).__name__}: {e}")
+
+
+bot = RLI_6Mans(command_prefix=PREFIX, intents=intents)
 # Initialize slash command tree
 tree = bot.tree
 
@@ -199,7 +219,7 @@ async def view_logs(interaction: discord.Interaction):
             if row != []:
                 new_line = f"{event[1][-8:]}\t{event[2]}\t"
 
-                for i in range(9 - len(event[2])):
+                for _ in range(9 - len(event[2])):
                     new_line += " "
 
                 new_line += event[3]
@@ -215,17 +235,7 @@ async def view_logs(interaction: discord.Interaction):
 
 # Run bot and load cogs
 async def main():
-    async with bot:
-        cogs = [f[:-3] for f in listdir() if "cog" == f[-6:-3]]
-        print("Cogs:")
-        for cog in cogs:
-            try:
-                await bot.load_extension(cog)
-                print(f"\t{cog}")
-            except Exception as e:
-                print(f"Failed to load {cog}")
-                print(f"{type(e).__name__}: {e}")
-        await bot.start(TOKEN)
+    await bot.start(TOKEN)
 
 
 asyncio.run(main())
