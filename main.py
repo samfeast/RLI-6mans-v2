@@ -5,6 +5,7 @@ from os import listdir
 import time
 import csv
 import json
+import asqlite
 
 discord.utils.setup_logging()
 
@@ -37,6 +38,9 @@ class RLI_6Mans(commands.Bot):
             except Exception as e:
                 print(f"Failed to load {cog}")
                 print(f"{type(e).__name__}: {e}")
+
+        # Create a connection pool for future database queries
+        self.pool = await asqlite.create_pool("database/database.db",)
 
 
 bot = RLI_6Mans(command_prefix=PREFIX, intents=intents)
@@ -93,7 +97,7 @@ async def synclocal_6mans(ctx):
     )
 
 
-# Reload a cog (cog argument does not need to contain _cog.py)
+# Reload a cog (cog argument need not contain _cog.py)
 @bot.command()
 async def reload_6mans(ctx, cog):
     log_event(
@@ -188,6 +192,18 @@ async def ping_main(interaction: discord.Interaction):
         ]
     )
     await interaction.response.send_message("Pong!", ephemeral=True)
+
+@tree.command(description="Make a test query to the database via the connection pool", guild=discord.Object(id=GUILD_ID))
+async def make_a_query(interaction: discord.Interaction):
+    async with bot.pool.acquire() as con:
+        res = await con.execute("SELECT user_id FROM data")
+        all_data = await res.fetchall()
+
+        list_of_users = []
+        for row in all_data:
+            list_of_users.append(row[0])
+
+    await interaction.response.send_message(list_of_users[0], ephemeral=True)
 
 
 # TODO: Add /export_logs (with a date parameter, uploading all logs on that date to a google sheet)
