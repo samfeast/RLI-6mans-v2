@@ -1,4 +1,3 @@
-from asyncore import write
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -88,7 +87,7 @@ class reporting(commands.Cog):
                 ]
             )
             await interaction.response.send_message(
-                f"{game_id} does not exist",
+                f"{game_id.upper().split('-')[0]} does not exist",
                 ephemeral=True,
             )
 
@@ -96,23 +95,30 @@ class reporting(commands.Cog):
     async def autocomplete_callback(
         self, interaction: discord.Interaction, current: str
     ):
-        with open("json/game_log.json") as read_file:
-            game_log = json.load(read_file)
+        async with self.bot.pool.acquire() as con:
+            res = await con.execute(
+                "SELECT game_id, created_timestamp, tier FROM game_log WHERE status = 'live'"
+            )
+            data = await res.fetchall()
+            live_series = []
+            for row in data:
+                live_series.append(row)
 
         choices = []
-        for game_id in list(game_log["live"].keys()):
+        for series in live_series:
+            # Discord has a limit of 25 autocomplete options - this ensures that isnt exceeded
             if len(choices) > 23:
                 break
             else:
-                minutes_since_created = round(
-                    (time.time() - game_log["live"][game_id]["created"]) / 60
-                )
-                tier = game_log["live"][game_id]["tier"].capitalize()
-                formatted_game_id = game_id.split("-")[0]
+                minutes_since_created = round((time.time() - series[1]) / 60)
+
+                tier = series[2].capitalize()
+                formatted_game_id = series[0].split("-")[0]
+
                 choices.append(
                     app_commands.Choice(
                         name=f"{formatted_game_id} ({tier}, {minutes_since_created} minutes ago)",
-                        value=game_id,
+                        value=series[0],
                     )
                 )
 
