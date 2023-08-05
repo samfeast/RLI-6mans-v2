@@ -83,22 +83,24 @@ class queue_handler(commands.Cog):
     async def cleaner(self):
         timestamp = round(time.time())
 
+        # Check through all the active queues and delete any which are more than an hour old
         active_queues_to_remove = []
-        live_games_to_remove = []
-
         for active_queue in active_queues:
             if timestamp - active_queues[active_queue]["timestamp"] > 3600:
                 active_queues_to_remove.append(active_queue)
 
-        with open("json/game_log.json", "r") as read_file:
-            game_log = json.load(read_file)
-
-        for game in game_log["live"]:
-            if (
-                timestamp - game_log["live"][game]["created"] > 28800
-                and game_log["live"][game]["timeout_immunity"] == False
-            ):
-                live_games_to_remove.append(game)
+        # Filter the game_log table for series that are 'live', were created more than 8 hours ago, and don't have timeout immunity
+        live_games_to_remove = []
+        async with self.bot.pool.acquire() as con:
+            res = await con.execute(
+                "SELECT game_id FROM game_log WHERE status = 'live' AND created_timestamp < ? AND timeout_immunity = ?",
+                (timestamp - 28800, 0),
+            )
+            live_games_to_remove = []
+            
+            # 'row' is of type sqlite3.Row, allowing data to be accessed like a dictionary with the column header as key
+            for row in await res.fetchall():
+                live_games_to_remove.append(row)
 
         for queue in active_queues_to_remove:
             log_event(
@@ -110,20 +112,24 @@ class queue_handler(commands.Cog):
                 ]
             )
             del active_queues[queue]
+
         for game in live_games_to_remove:
+            # 'game' is in the form ("game_id",)
             log_event(
                 [
                     round(time.time(), 2),
                     time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                     "Queue",
-                    f"Deleting {game} from live game log (>8 hours since creation)",
+                    f"Deleting {game['game_id']} from live game log (>8 hours since creation)",
                 ]
             )
-            del game_log["live"][game]
 
-        if len(live_games_to_remove) > 0:
-            with open("json/game_log.json", "w") as write_file:
-                json.dump(game_log, write_file, indent=2)
+            async with self.bot.pool.acquire() as con:
+                cur = await con.cursor()
+                res = await cur.execute(
+                    "DELETE FROM game_log WHERE game_id = ?", (game["game_id"],)
+                )
+                await con.commit()
 
     @cleaner.before_loop
     async def before_queue_reminder(self):

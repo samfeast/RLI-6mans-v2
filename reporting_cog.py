@@ -99,9 +99,8 @@ class reporting(commands.Cog):
             res = await con.execute(
                 "SELECT game_id, created_timestamp, tier FROM game_log WHERE status = 'live'"
             )
-            data = await res.fetchall()
             live_series = []
-            for row in data:
+            for row in await res.fetchall():
                 live_series.append(row)
 
         choices = []
@@ -110,15 +109,17 @@ class reporting(commands.Cog):
             if len(choices) > 23:
                 break
             else:
-                minutes_since_created = round((time.time() - series[1]) / 60)
+                minutes_since_created = round(
+                    (time.time() - series["created_timestamp"]) / 60
+                )
 
-                tier = series[2].capitalize()
-                formatted_game_id = series[0].split("-")[0]
+                tier = series["tier"].capitalize()
+                formatted_game_id = series["game_id"].split("-")[0]
 
                 choices.append(
                     app_commands.Choice(
                         name=f"{formatted_game_id} ({tier}, {minutes_since_created} minutes ago)",
-                        value=series[0],
+                        value=series["game_id"],
                     )
                 )
 
