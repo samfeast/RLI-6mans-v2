@@ -16,14 +16,15 @@ def create_blank_db():
             created_timestamp, reported_timestamp, 
             tier, team_type, 
             t1_p1, t1_p2, t1_p3, t2_p1, t2_p2, t2_p3, 
-            winning_team, losing_team, p1_win, p2_win, elo_swing)"""
+            winning_team, losing_team, p1_win, p2_win, 
+            elo_swing, timeout_immunity)"""
     )
     con.commit()
 
 
 if os.path.exists("database/database.db"):
     confirmation = input(
-        "database.db already exists. Type 'Y' to delete it and create new blank database: "
+        "database.db already exists. Type 'Y' to delete it and create a new, blank database: "
     )
     if confirmation.lower() == "y":
         os.remove("database/database.db")
