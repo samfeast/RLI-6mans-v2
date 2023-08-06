@@ -31,11 +31,11 @@ TEAM_PICKER_COLOURS = {"random": 0xDA373C, "captains": 0x5865F2, "balanced": 0x2
 # 5/6 players queued for ease of testing
 queue = {
     "elite": {
-        935182920019234887: 2000000000,
-        1104162909120110603: 2000000000,
-        865798504714338324: 2000000000,
-        988906946725822484: 2000000000,
-        963466636059365476: 2000000000,
+        797201172792344616: 1691310864,  # ME
+        402523329954840596: 1691310864,  # ALT
+        935182920019234887: 1691310864,  # BOT-Q
+        1104162909120110603: 1691310864,  # BOT-W
+        865798504714338324: 1591310864,  # BOT-E
     },
     "premier": {},
     "championship": {},
@@ -97,7 +97,7 @@ class queue_handler(commands.Cog):
                 (timestamp - 28800, 0),
             )
             live_games_to_remove = []
-            
+
             # 'row' is of type sqlite3.Row, allowing data to be accessed like a dictionary with the column header as key
             for row in await res.fetchall():
                 live_games_to_remove.append(row)
@@ -132,7 +132,7 @@ class queue_handler(commands.Cog):
                 await con.commit()
 
     @cleaner.before_loop
-    async def before_queue_reminder(self):
+    async def before_cleaner(self):
         log_event(
             [
                 round(time.time(), 2),
@@ -145,9 +145,6 @@ class queue_handler(commands.Cog):
 
     @tasks.loop(minutes=2)
     async def queue_reminder(self):
-        with open("json/member_info.json", "r") as read_file:
-            member_info = json.load(read_file)
-
         dm_notices = {}
         ping_notices = {}
         removal_notices = {}
@@ -163,19 +160,32 @@ class queue_handler(commands.Cog):
                     else:
                         removal_notices[player] = [tier]
                 else:
-                    if str(player) in member_info:
-                        player_reminder_settings = member_info[str(player)]["reminder"]
+                    player_reminder_settings = None
+                    async with self.bot.pool.acquire() as con:
+                        res = await con.execute(
+                            "SELECT * FROM reminders WHERE id = ?", (player,)
+                        )
+                        data = await res.fetchall()
+                        if data != []:
+                            player_reminder_settings = {
+                                "type": data[0]["type"],
+                                "interval": data[0]["interval"],
+                                "message_type": data[0]["message_type"],
+                            }
+                    if player_reminder_settings != None:
                         if time_delta > player_reminder_settings["interval"]:
                             if player_reminder_settings["message_type"] == "DM":
                                 if player in dm_notices:
-                                    dm_notices[player].append(tier)
+                                    dm_notices[player]["tiers"].append(tier)
                                 else:
-                                    dm_notices[player] = [tier]
+                                    dm_notices[player] = player_reminder_settings
+                                    dm_notices[player]["tiers"] = [tier]
                             elif player_reminder_settings["message_type"] == "Ping":
                                 if player in ping_notices:
-                                    ping_notices[player].append(tier)
+                                    ping_notices[player]["tiers"].append(tier)
                                 else:
-                                    ping_notices[player] = [tier]
+                                    ping_notices[player] = player_reminder_settings
+                                    ping_notices[player]["tiers"] = [tier]
 
         if len(dm_notices) + len(ping_notices) + len(removal_notices) == 0:
             pass
@@ -185,14 +195,14 @@ class queue_handler(commands.Cog):
                     round(time.time(), 2),
                     time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                     "Queue",
-                    f"Reminder task loop run with {len(dm_notices)} DM notices, {len(ping_notices)} ping notices, and {len(removal_notices)} removal notices required",
+                    f"Reminder task loop run with {len(dm_notices)} DM notices, {len(ping_notices)} ping notices, and {len(removal_notices)} forced removals required",
                 ]
             )
-            await self.send_dm_notices(member_info, dm_notices)
-            await self.send_ping_notices(member_info, ping_notices)
+            await self.send_dm_notices(dm_notices)
+            await self.send_ping_notices(ping_notices)
             await self.send_removal_notices(removal_notices)
 
-    async def send_dm_notices(self, member_info, dm_notices):
+    async def send_dm_notices(self, dm_notices):
         for player in dm_notices:
             player_user = self.bot.get_user(player)
 
@@ -201,7 +211,7 @@ class queue_handler(commands.Cog):
                     round(time.time(), 2),
                     time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                     "Queue",
-                    f"Processing DM notice for {player_user.name} [{player}] (Type: {member_info[str(player)]['reminder']['type']})",
+                    f"Processing DM notice for {player_user.name} [{player}] (Type: {dm_notices[player]['type']}",
                 ]
             )
 
@@ -210,19 +220,17 @@ class queue_handler(commands.Cog):
                 text="Change behaviour with /reminder",
                 icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
             )
-            if member_info[str(player)]["reminder"]["type"] == "Reminder":
+            if dm_notices[player]["type"] == "Reminder":
                 embed.title = "Reminder!"
-                embed.description = (
-                    f"You are still in the {' and '.join(dm_notices[player])} queue"
-                )
-                embed.color = 0x0062FF
-                for tier in dm_notices[player]:
+                embed.description = f"You are still in the {' and '.join(dm_notices[player]['tiers'])} queue"
+                embed.color = 0x3381FF
+                for tier in dm_notices[player]["tiers"]:
                     queue[tier][player] = round(time.time())
-            elif member_info[str(player)]["reminder"]["type"] == "Remove":
+            elif dm_notices[player]["type"] == "Removal":
                 embed.title = "Removed for inactivity"
-                embed.description = f"You have been removed from the {' and '.join(dm_notices[player])} queue"
+                embed.description = f"You have been removed from the {' and '.join(dm_notices[player]['tiers'])} queue"
                 embed.color = 0xFF0000
-                for tier in dm_notices[player]:
+                for tier in dm_notices[player]["tiers"]:
                     await self.remove_from_queue(
                         None, player_user, tier, CHANNELS[tier], True
                     )
@@ -239,7 +247,7 @@ class queue_handler(commands.Cog):
                     ]
                 )
 
-    async def send_ping_notices(self, member_info, ping_notices):
+    async def send_ping_notices(self, ping_notices):
         for player in ping_notices:
             player_user = self.bot.get_user(player)
 
@@ -248,7 +256,7 @@ class queue_handler(commands.Cog):
                     round(time.time(), 2),
                     time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                     "Queue",
-                    f"Processing ping notice for {player_user.name} [{player}] (Type: {member_info[str(player)]['reminder']['type']})",
+                    f"Processing ping notice for {player_user.name} [{player}] (Type: {ping_notices[player]['type']})",
                 ]
             )
 
@@ -257,24 +265,24 @@ class queue_handler(commands.Cog):
                 text="Change behaviour with /reminder",
                 icon_url=f"https://cdn.discordapp.com/emojis/607596209254694913.png?v=1",
             )
-            if member_info[str(player)]["reminder"]["type"] == "Reminder":
+            if ping_notices[player]["type"] == "Reminder":
                 embed.title = "Reminder!"
                 embed.description = (
                     f"{player_user.mention} - you are still in the queue"
                 )
-                embed.color = 0x0062FF
-                for tier in ping_notices[player]:
+                embed.color = 0x3381FF
+                for tier in ping_notices[player]["tiers"]:
                     queue[tier][player] = round(time.time())
                     tier_channel = self.bot.get_channel(CHANNELS[tier])
                     await tier_channel.send(f"||{player_user.mention}||", embed=embed)
 
-            elif member_info[str(player)]["reminder"]["type"] == "Remove":
+            elif ping_notices[player]["type"] == "Removal":
                 embed.title = "Removed for inactivity"
                 embed.description = (
                     f"{player_user.mention} - you have been removed from the queue"
                 )
                 embed.color = 0xFF0000
-                for tier in ping_notices[player]:
+                for tier in ping_notices[player]["tiers"]:
                     tier_channel = self.bot.get_channel(CHANNELS[tier])
                     await tier_channel.send(f"||{player_user.mention}||", embed=embed)
                     await self.remove_from_queue(
