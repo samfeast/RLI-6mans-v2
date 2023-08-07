@@ -112,7 +112,7 @@ class queue_handler(commands.Cog):
             )
             live_games_to_remove = []
 
-            # 'row' is of type sqlite3.Row, allowing data to be accessed like a dictionary with the column header as key
+            # 'row' is of type sqlite3.Row, allowing data to be accessed further down like a dictionary with the column header as key
             for row in await res.fetchall():
                 live_games_to_remove.append(row)
 
@@ -709,17 +709,12 @@ class queue_handler(commands.Cog):
     @app_commands.command(description="Check how many players are in the queue.")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def status(self, interaction: discord.Interaction):
-        if interaction.channel_id == CHANNELS["elite"]:
-            await self.show_status(interaction, queue["elite"])
-        elif interaction.channel_id == CHANNELS["premier"]:
-            await self.show_status(interaction, queue["premier"])
-        elif interaction.channel_id == CHANNELS["championship"]:
-            await self.show_status(interaction, queue["championship"])
-        elif interaction.channel_id == CHANNELS["casual"]:
-            await self.show_status(interaction, queue["casual"])
-        else:
+        try:
+            tier = QUEUE_CHANNEL_TO_TIER[interaction.channel.id]
+            await self.show_status(interaction, queue[tier])
+        except KeyError:
             await interaction.response.send_message(
-                "There is no queue in this channel.", ephemeral=True
+                "Queueing is not enabled in this channel.", ephemeral=True
             )
 
     async def show_status(self, interaction, queue):
@@ -781,46 +776,35 @@ class Team_Picker(discord.ui.View):
 
         current_queue = active_queues[game_id]["players"]
         if team_type == "random":
-            with open("json/game_log.json", "r") as read_file:
-                game_log = json.load(read_file)
-
-            # Makes a list containing all the game IDs of completed series, and reverses it so that most recently reported series are at the front of the list
-            game_log_keys = list(game_log["complete"].keys())
-            game_log_keys.reverse()
-
-            # Get a list of game IDs of series started within the last 10800 seconds (3 hours)
-            current_timestamp = round(time.time())
-            recent_matches = []
-            for key in game_log_keys:
-                if current_timestamp - game_log["complete"][key]["reported"] < 10800:
-                    recent_matches.append(key)
-
-            # Filter recent_matches to only contain matches containing the same 6 players as the current queue
-            filtered_matches = list(
-                (
-                    key
-                    for key in recent_matches
-                    if sorted(current_queue)
-                    == sorted(
-                        game_log["complete"][key]["team1"]
-                        + game_log["complete"][key]["team2"]
-                    )
+            async with self.bot.pool.acquire() as con:
+                # Make a list of tuples containing the team compositions of queues played within the last 3 hours
+                res = await con.execute(
+                    "SELECT t1_p1, t1_p2, t1_p3, t2_p1, t2_p2, t2_p3 FROM game_log WHERE created_timestamp > ?",
+                    (round(time.time()) - 10800,),
                 )
-            )
+                team_compositions = []
+                for row in await res.fetchall():
+                    team_compositions.append(row)
 
-            if filtered_matches != []:
+            # Filter team compositions to only contain queues with the same 6 players
+            filtered_team_compositions = []
+            for team_composition in team_compositions:
+                if sorted(team_composition) == sorted(current_queue):
+                    filtered_team_compositions.append(team_composition)
+
+            if filtered_team_compositions != []:
                 log_event(
                     [
                         round(time.time(), 2),
                         time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                         "Queue",
-                        f"{len(recent_matches)} recent matches found {recent_matches} with {len(filtered_matches)} {filtered_matches} containing the same players as the current queue {game_id}",
+                        f"{len(team_compositions)} recent matches found with {len(filtered_team_compositions)} containing the same players as the current queue ({game_id})",
                     ]
                 )
 
             # Keep randomising the teams until it finds a combination that hasn't been seen in any of the filtered matches
             # In theory (but likely never in reality) if all 10 team compositions have been played in the last 3 hours, this won't be able to find a new combination
-            # If it fails to make unique teams 100 times in a row, it will still return teams that are repeats of a previous queue
+            # If it fails to make unique teams 100 times in a row, it may return teams that are repeats of a previous queue
             shuffle_attempts = 0
             while shuffle_attempts < 100:
                 shuffle_attempts += 1
@@ -830,18 +814,28 @@ class Team_Picker(discord.ui.View):
                 team2 = [current_queue[3], current_queue[4], current_queue[5]]
 
                 count_unique = 0
-                for key in filtered_matches:
+                for team_composition in filtered_team_compositions:
                     # Check if team1 in the current queue is the same as EITHER team1 or team2 in a recent queue
                     # N.B: If team1 appears in a recent queue, team2 MUST as well, as we're only going through matches containing the same 6 players
                     if sorted(team1) == sorted(
-                        game_log["complete"][key]["team1"]
-                    ) or sorted(team1) == sorted(game_log["complete"][key]["team2"]):
+                        [
+                            team_composition["t1_p1"],
+                            team_composition["t1_p2"],
+                            team_composition["t1_p3"],
+                        ]
+                    ) or sorted(team1) == sorted(
+                        [
+                            team_composition["t2_p1"],
+                            team_composition["t2_p2"],
+                            team_composition["t2_p3"],
+                        ]
+                    ):
                         break
                     else:
                         count_unique += 1
-                # This condition is met when the current team1 and team2 are different to the team setups in ALL of the filtered matches
+                # This condition is met when the current team1 and team2 are different to the team setups in ALL of the filtered team compositions
                 # When this is met we know we have teams which have not been seen in the last 3 hours, so can stop shuffling
-                if count_unique == len(filtered_matches):
+                if count_unique == len(filtered_team_compositions):
                     break
 
             if shuffle_attempts == 100:
@@ -850,7 +844,7 @@ class Team_Picker(discord.ui.View):
                         round(time.time(), 2),
                         time.strftime("%d-%m-%y %H:%M:%S", time.localtime()),
                         "Queue",
-                        f"ERROR: Failed to find non-repeated random teams in 100 shuffle attempts",
+                        f"ERROR: Failed to find non-repeated random teams after 100 shuffle attempts",
                     ]
                 )
             elif shuffle_attempts > 1:
