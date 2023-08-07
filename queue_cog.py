@@ -31,11 +31,11 @@ TEAM_PICKER_COLOURS = {"random": 0xDA373C, "captains": 0x5865F2, "balanced": 0x2
 # 5/6 players queued for ease of testing
 queue = {
     "elite": {
-        797201172792344616: 1691310864,  # ME
-        402523329954840596: 1691310864,  # ALT
-        935182920019234887: 1691310864,  # BOT-Q
-        1104162909120110603: 1691310864,  # BOT-W
-        865798504714338324: 1591310864,  # BOT-E
+        402523329954840596: 2691310864,  # ALT
+        935182920019234887: 2691310864,  # BOT-Q
+        1104162909120110603: 2691310864,  # BOT-W
+        865798504714338324: 2591310864,  # BOT-E
+        988906946725822484: 2691310864, # BOT-R
     },
     "premier": {},
     "championship": {},
@@ -500,8 +500,14 @@ class queue_handler(commands.Cog):
             )
 
             if len(queue[tier]) == 6:
-                with open("json/game_log.json", "r") as read_file:
-                    game_log = json.load(read_file)
+
+                async with self.bot.pool.acquire() as con:
+                    # Creates a list of game_ids that have already been used
+                    # Only filters for games in the last 24 hours as games before that will have a different date code
+                    res = await con.execute("SELECT game_id FROM game_log WHERE created_timestamp > ?", (round(time.time()) - 86400,))
+                    used_game_ids = []
+                    for row in await res.fetchall():
+                        used_game_ids.append(row["game_id"])
 
                 # Crude method of picking a game id which hasn't been used before
                 date = datetime.now(pytz.timezone("Europe/Dublin")).strftime("%d%m%y")
@@ -509,8 +515,7 @@ class queue_handler(commands.Cog):
 
                 while (
                     game_id in active_queues
-                    or game_id in game_log["live"]
-                    or game_id in game_log["complete"]
+                    or game_id in used_game_ids
                 ):
                     game_id = "RLI" + str(random.randint(1, 999)) + "-" + date
 
