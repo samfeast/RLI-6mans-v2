@@ -25,6 +25,20 @@ CHANNELS = {
     "casual_logs": config["CHANNELS"]["CASUAL_LOGS"],
 }
 
+QUEUE_CHANNEL_TO_TIER = {
+    config["CHANNELS"]["ELITE"]: "elite",
+    config["CHANNELS"]["PREMIER"]: "premier",
+    config["CHANNELS"]["CHAMPIONSHIP"]: "championship",
+    config["CHANNELS"]["CASUAL"]: "casual",
+}
+
+LOGS_CHANNEL_TO_TIER = {
+    config["CHANNELS"]["ELITE_LOGS"]: "elite",
+    config["CHANNELS"]["PREMIER_LOGS"]: "premier",
+    config["CHANNELS"]["CHAMPIONSHIP_LOGS"]: "championship",
+    config["CHANNELS"]["CASUAL_LOGS"]: "casual",
+}
+
 ELO_SENSITIVITY = config["ELO_SENSITIVITY"]
 TEAM_PICKER_COLOURS = {"random": 0xDA373C, "captains": 0x5865F2, "balanced": 0x248046}
 
@@ -35,7 +49,7 @@ queue = {
         935182920019234887: 2691310864,  # BOT-Q
         1104162909120110603: 2691310864,  # BOT-W
         865798504714338324: 2591310864,  # BOT-E
-        988906946725822484: 2691310864, # BOT-R
+        988906946725822484: 2691310864,  # BOT-R
     },
     "premier": {},
     "championship": {},
@@ -344,21 +358,8 @@ class queue_handler(commands.Cog):
             ]
         )
 
-        tier = None
-        if interaction.channel.id == CHANNELS["elite"]:
-            tier = "elite"
-        elif interaction.channel.id == CHANNELS["premier"]:
-            tier = "premier"
-        elif interaction.channel.id == CHANNELS["championship"]:
-            tier = "championship"
-        elif interaction.channel.id == CHANNELS["casual"]:
-            tier = "casual"
-        else:
-            await interaction.response.send_message(
-                "Queuing is not enabled in this channel.", ephemeral=True
-            )
-
-        if tier:
+        try:
+            tier = QUEUE_CHANNEL_TO_TIER[interaction.channel.id]
             if interaction.user.id in queue[tier]:
                 await interaction.response.send_message(
                     "You are already in the queue.", ephemeral=True
@@ -367,6 +368,10 @@ class queue_handler(commands.Cog):
                 await self.add_to_queue(
                     interaction, interaction.user, tier, CHANNELS[tier], False
                 )
+        except KeyError:
+            await interaction.response.send_message(
+                "Queuing is not enabled in this channel.", ephemeral=True
+            )
 
     @app_commands.command(description="Add a user to the queue.")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
@@ -380,28 +385,19 @@ class queue_handler(commands.Cog):
             ]
         )
 
-        tier = None
-        if interaction.channel.id == CHANNELS["elite_logs"]:
-            tier = "elite"
-        elif interaction.channel.id == CHANNELS["premier_logs"]:
-            tier = "premier"
-        elif interaction.channel.id == CHANNELS["championship_logs"]:
-            tier = "championship"
-        elif interaction.channel.id == CHANNELS["casual_logs"]:
-            tier = "casual"
-        else:
-            await interaction.response.send_message(
-                "This command must be used in the corresponding logs channel.",
-                ephemeral=True,
-            )
-
-        if tier:
+        try:
+            tier = LOGS_CHANNEL_TO_TIER[interaction.channel.id]
             if user.id in queue[tier]:
                 await interaction.response.send_message(
                     "User is already in the queue.", ephemeral=True
                 )
             else:
                 await self.add_to_queue(interaction, user, tier, CHANNELS[tier], True)
+        except KeyError:
+            await interaction.response.send_message(
+                "This command must be used in the corresponding logs channel.",
+                ephemeral=True,
+            )
 
     async def add_to_queue(self, interaction, user, tier, queue_channel_id, added):
         queue_channel = self.bot.get_channel(queue_channel_id)
@@ -500,11 +496,13 @@ class queue_handler(commands.Cog):
             )
 
             if len(queue[tier]) == 6:
-
                 async with self.bot.pool.acquire() as con:
                     # Creates a list of game_ids that have already been used
                     # Only filters for games in the last 24 hours as games before that will have a different date code
-                    res = await con.execute("SELECT game_id FROM game_log WHERE created_timestamp > ?", (round(time.time()) - 86400,))
+                    res = await con.execute(
+                        "SELECT game_id FROM game_log WHERE created_timestamp > ?",
+                        (round(time.time()) - 86400,),
+                    )
                     used_game_ids = []
                     for row in await res.fetchall():
                         used_game_ids.append(row["game_id"])
@@ -513,10 +511,7 @@ class queue_handler(commands.Cog):
                 date = datetime.now(pytz.timezone("Europe/Dublin")).strftime("%d%m%y")
                 game_id = "RLI" + str(random.randint(1, 999)) + "-" + date
 
-                while (
-                    game_id in active_queues
-                    or game_id in used_game_ids
-                ):
+                while game_id in active_queues or game_id in used_game_ids:
                     game_id = "RLI" + str(random.randint(1, 999)) + "-" + date
 
                 active_queues[game_id] = {
@@ -538,7 +533,6 @@ class queue_handler(commands.Cog):
                     ]
                 )
 
-                # Could this be refactored to be nicer than this?
                 mention_players = []
                 for player in active_queues[game_id]["players"]:
                     player_user = self.bot.get_user(player)
@@ -564,6 +558,7 @@ class queue_handler(commands.Cog):
                             None, player_user, "casual", CHANNELS["casual"], True
                         )
 
+                # Clear the queue now that it's filled
                 queue[tier] = {}
 
                 log_event(
@@ -600,23 +595,15 @@ class queue_handler(commands.Cog):
                 f"'l' used by {interaction.user.name} [{interaction.user.id}] in {interaction.channel.name} [{interaction.channel.id}]",
             ]
         )
-        tier = None
-        if interaction.channel_id == CHANNELS["elite"]:
-            tier = "elite"
-        elif interaction.channel_id == CHANNELS["premier"]:
-            tier = "premier"
-        elif interaction.channel_id == CHANNELS["championship"]:
-            tier = "championship"
-        elif interaction.channel_id == CHANNELS["casual"]:
-            tier = "casual"
-        else:
-            await interaction.response.send_message(
-                "Queuing is not enabled in this channel.", ephemeral=True
-            )
 
-        if tier:
+        try:
+            tier = QUEUE_CHANNEL_TO_TIER[interaction.channel.id]
             await self.remove_from_queue(
                 interaction, interaction.user, tier, CHANNELS[tier], False
+            )
+        except KeyError:
+            await interaction.response.send_message(
+                "Queuing is not enabled in this channel.", ephemeral=True
             )
 
     # Leave command
@@ -632,23 +619,14 @@ class queue_handler(commands.Cog):
             ]
         )
 
-        tier = None
-        if interaction.channel_id == CHANNELS["elite_logs"]:
-            tier = "elite"
-        elif interaction.channel_id == CHANNELS["premier_logs"]:
-            tier = "premier"
-        elif interaction.channel_id == CHANNELS["championship_logs"]:
-            tier = "championship"
-        elif interaction.channel_id == CHANNELS["casual_logs"]:
-            tier = "casual"
-        else:
+        try:
+            tier = LOGS_CHANNEL_TO_TIER[interaction.channel.id]
+            await self.remove_from_queue(interaction, user, tier, CHANNELS[tier], True)
+        except KeyError:
             await interaction.response.send_message(
                 "This command must be used in the corresponding logs channel.",
                 ephemeral=True,
             )
-
-        if tier:
-            await self.remove_from_queue(interaction, user, tier, CHANNELS[tier], True)
 
     # Queue removal function
     async def remove_from_queue(
